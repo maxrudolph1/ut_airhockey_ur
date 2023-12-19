@@ -45,11 +45,10 @@ def main():
     rcv = RTDEReceive("172.22.22.2")
 
     # Parameters
-    speed_magnitude = 0.1
+    speed_magnitude = 0.05
     speed_vector = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     ctrl.jogStart(speed_vector, RTDEControl.FEATURE_TOOL)
 
-    print(rcv.getTargetTCPPose())
 
 
     try:
@@ -80,6 +79,7 @@ def main():
                     speed_vector = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
                 ctrl.jogStart(speed_vector, RTDEControl.FEATURE_TOOL)
                 apply_negative_z_force(ctrl)
+                print(rcv.getTargetTCPPose())
 
     finally:
         ctrl.jogStop()
