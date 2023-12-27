@@ -28,13 +28,16 @@ class NonBlockingConsole(object):
         if select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
             return sys.stdin.read(1)
         return False
-
  
 
-def apply_negative_z_force(ctrl):
-    task_frame = [0, 0, 0, 0, 0, 0]
+def apply_negative_z_force(ctrl, rcv=None):
+    if rcv is None:
+        task_frame = [0, 0, 0, 0, 0, 0]
+        wrench_down = [0.0, 0.0, -5, 0.0, 0.0, 0.0]
+    else:
+        task_frame = rcv.getTargetTCPPose()
+        wrench_down = [0.0, 0.0, 5, 0.0, 0.0, 0.0]
     selection_vector = [0, 0, 1, 0, 0, 0]
-    wrench_down = [0.0, 0.0, -5, 0.0, 0.0, 0.0]
     ctrl_type = 2  # Assuming no transformation of the force frame
     limits = [2.0, 2.0, 1.5, 1.0, 1.0, 1.0]
 
@@ -47,8 +50,10 @@ def main():
     # Parameters
     speed_magnitude = 0.05
     speed_vector = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    ctrl.jogStart(speed_vector, RTDEControl.FEATURE_TOOL)
+    ######  RPY of the Tool Frame when the table is at an angle for reference ####
+    # [-0.05153677648744038, -3.0947520618606172, 0.]
 
+    ctrl.jogStart(speed_vector, RTDEControl.FEATURE_TOOL)
 
 
     try:
@@ -78,8 +83,8 @@ def main():
                 else:
                     speed_vector = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
                 ctrl.jogStart(speed_vector, RTDEControl.FEATURE_TOOL)
-                apply_negative_z_force(ctrl)
-                print(rcv.getTargetTCPPose())
+                apply_negative_z_force(ctrl, rcv)
+                print(rcv.getActualTCPPos(e))
 
     finally:
         ctrl.jogStop()
