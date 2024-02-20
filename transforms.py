@@ -18,7 +18,7 @@ class Plane:
         return t * direction, t
 
 
-table_plane = Plane(np.tan(0.26), 0, -1, -0.99)
+table_plane = Plane(0.1, 0, 0.99, .05476)
 
 
 def compute_affine_transform(P, Q):
@@ -73,7 +73,7 @@ class RobosuiteTransforms:
 
     # Given XY coordinates relative to the camera, provide the expected Z coordinate
     def get_relative_coord(self, pixel_coord):
-        print(self.intrinsic_inv.shape, pixel_coord)
+        # print(self.intrinsic_inv.shape, pixel_coord)
         relative_coord = np.matmul(self.intrinsic_inv, pixel_coord)
         relative_coord = np.append(relative_coord, 1)
         return relative_coord

@@ -30,6 +30,19 @@ class NonBlockingConsole(object):
         if select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
             return sys.stdin.read(1)
         return False
+    
+class ProtectedArray:
+    def __init__(self, array):
+        self.array = array
+        self.lock = multiprocessing.Lock()
+
+    def __getitem__(self, index):
+        with self.lock:
+            return self.array[index]
+
+    def __setitem__(self, index, value):
+        with self.lock:
+            self.array[index] = value
 
 vel = 0.8
 acc = 0.8
@@ -59,15 +72,15 @@ def apply_negative_z_force(ctrl, rcv=None):
 
 
 def camera_callback(shared_array):
-    pipe_fd = pipe.fileno()
-
     cap = cv2.VideoCapture(0)
-    cv2.setMouseCallback('image', move_event)
 
     while True:
         ret, image = cap.read()
         cv2.imshow('image',image)
-        pipe.send(mousepos)
+        cv2.setMouseCallback('image', move_event)
+        shared_array[0] = mousepos[0]
+        shared_array[1] = mousepos[1]
+        shared_array[2] = mousepos[2]
         cv2.waitKey(1)
 
 def move_event(event, x, y, flags, params):
@@ -90,8 +103,13 @@ def main():
     ctrl = RTDEControl("172.22.22.2", rtde_frequency, RTDEControl.FLAG_USE_EXT_UR_CAP)
     rcv = RTDEReceive("172.22.22.2")
 
-    consumer, producer = multiprocessing.Array("f", 2)
-    camera_process = multiprocessing.Process(target=camera_callback, )
+    shared_mouse_pos = multiprocessing.Array("f", 3)
+    shared_mouse_pos[0] = 0
+    shared_mouse_pos[1] = 0
+    shared_mouse_pos[2] = 1
+    protected_mouse_pos = ProtectedArray(shared_mouse_pos)
+    camera_process = multiprocessing.Process(target=camera_callback, args=(protected_mouse_pos,))
+    camera_process.start()
     
     print(rcv.getTargetTCPPose())
     # cap = cv2.VideoCapture(0)
@@ -120,20 +138,26 @@ def main():
             # Setting a reset pose for the robot
             reset_pose = ([-0.68, 0., 0.33, -0.05153677648744038, -3.0947520618606172, 0.], vel,acc)
             print("reset to initial pose:", ctrl.moveL(reset_pose[0], reset_pose[1], reset_pose[2], False))
-            for i in range(1000):
+            count = 0
+            while True:
+                time.sleep(0.1)
                 # ret, image = cap.read()
                 # cv2.imshow('image',image)
                 # cv2.setMouseCallback('image', move_event)
                 # cv2.waitKey(1)
-                pixel_coord = mousepos
+                pixel_coord = [0, 0, 1]
+                pixel_coord[0] = protected_mouse_pos[0]
+                pixel_coord[1] = protected_mouse_pos[1]
+                pixel_coord[2] = protected_mouse_pos[2]
+                print("Consumer Side Pixel Coord: ", pixel_coord)
                 relative_coord = transforms.get_relative_coord(pixel_coord)
-                world_coord = transforms.pixel_to_world_coord(np.array(pixel_coord), solve_for_z=False)
-                world_coord = (A @ world_coord[:2] + t)  * np.array([1,1.512])
+                world_coord = transforms.pixel_to_world_coord(np.array(pixel_coord), solve_for_z=True)
+                # world_coord = (A @ world_coord[:2] + t)  * np.array([1,1.512])
                 # error = np.array(world_coord[:-1]) - obs[-3:]
                 # print(obs[-3:], world_coord[:-1], error)
                 # action = np.append(np.ones(6) * 300, world_coord[:-1], axis=0)
                 # obs, reward, done, info, _ = env.step(action)
-                ret, image = cap.read()
+                # ret, image = cap.read()
 
                 print("To exit press 'q'")
                 val = nbc.get_data()
@@ -141,33 +165,36 @@ def main():
 
                 # force control, need it to keep it on the table
                 ### MUST RUN THIS BEFORE MOVEL ###
-                apply_negative_z_force(ctrl, rcv) 
+                # apply_negative_z_force(ctrl, rcv)
 
                 # randomly sampling from a box in the workspace
-                x_min = -0.8
-                x_max = -0.4
-                y_min = -0.30
-                y_max = 0.30
+                x_min = -1.5
+                x_max = -0.1
+                y_min = -5
+                y_max = 5
 
                 x = np.random.random() * (x_max - x_min) + x_min
                 y = np.random.random() * (y_max - y_min) + y_min
 
                 world_coord[0] = np.clip(world_coord[0], x_min, x_max, )
                 world_coord[1] = np.clip(world_coord[1], y_min, y_max, )
-                x, y = world_coord
+                world_coord[2] += 0.202086849139
+                print(world_coord)
+                x, y, _, _ = world_coord
 
                 # 0.32 here is a default z value. Force control allows us not to compute the *exact* z value here
-                pose = ([x, -y, 0.32, -0.05153677648744038, -3.0947520618606172, 0.], vel,acc)
+                pose = ([x, -y, 0.33, -0.05153677648744038, -3.0947520618606172, 0.], vel,acc)
 
-                print("movel", ctrl.moveL(pose[0], pose[1], pose[2], False))
+                # print("movel", ctrl.moveL(pose[0], pose[1], pose[2], asynchronous=True))
 
                 # apply force control again just in case the arm leaves the table
-                apply_negative_z_force(ctrl, rcv) 
+                # apply_negative_z_force(ctrl, rcv) 
 
                 print(rcv.getTargetTCPPose())
 
 
     finally:
+        camera_process.kill()
         ctrl.forceModeStop()
         ctrl.stopScript()
 
