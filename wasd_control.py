@@ -84,7 +84,7 @@ def main():
                     speed_vector = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
                 ctrl.jogStart(speed_vector, RTDEControl.FEATURE_TOOL)
                 apply_negative_z_force(ctrl, rcv)
-                print(rcv.getActualTCPPos(e))
+                print(rcv.getActualTCPPos())
 
     finally:
         ctrl.jogStop()

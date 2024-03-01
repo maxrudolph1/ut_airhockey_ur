@@ -5,6 +5,7 @@ from rtde_receive import RTDEReceiveInterface as RTDEReceive
 rtde_frequency = 500.0
 from pynput import keyboard
 import multiprocessing
+import pickle
 
 PRESS_VAL = ""
 
@@ -44,8 +45,6 @@ class ProtectedArray:
         with self.lock:
             self.array[index] = value
 
-vel = 0.8
-acc = 0.8
 
 ##### TO CALL MOVEL, PLEASE USE THE SINGLE POSE ARGUMENT FORMAT #####
 from transforms import RobosuiteTransforms, compute_affine_transform
@@ -63,7 +62,7 @@ def apply_negative_z_force(ctrl, rcv=None):
         wrench_down = [0.0, 0.0, -5, 0.0, 0.0, 0.0]
     else:
         task_frame = rcv.getTargetTCPPose()
-        wrench_down = [0.0, 0.0, 10, 0.0, 0.0, 0.0]
+        wrench_down = [0.0, 0.0, 5, 0.0, 0.0, 0.0]
     selection_vector = [0, 0, 1, 0, 0, 0]
     ctrl_type = 2  # Assuming no transformation of the force frame
     limits = [2.0, 2.0, 1.5, 1.0, 1.0, 1.0]
@@ -125,6 +124,17 @@ def main():
 
     A, t = compute_affine_transform(camera_numbers, robot_numbers)
 
+    vel = 0.8 # velocity limit
+    acc = 0.8 # acceleration limit 
+    xscale = 0.7 # scaling parameters for speed control
+    yscale = 0.7
+    rmax = 0.2 # polar coordinates maximum radius # TODO: make this an ellipsoid short edge y
+    rmax_x = 0.23
+    rmax_y = 0.12
+    block_time = 0.048 # time for the robot to reach a position (blocking)
+    lookahead = 0.2 # smooths more with larger values (0.03-0.2)
+    gain = 400 # 100-2000
+    measured_values = list()
     try:
         with NonBlockingConsole() as nbc:
             i = 0
@@ -137,10 +147,13 @@ def main():
 
             # Setting a reset pose for the robot
             reset_pose = ([-0.68, 0., 0.33, -0.05153677648744038, -3.0947520618606172, 0.], vel,acc)
+            # reset_pose = ([-0.68, 0., 0.43, -0.05153677648744038, -3.0947520618606172, 0.], vel,acc)
             print("reset to initial pose:", ctrl.moveL(reset_pose[0], reset_pose[1], reset_pose[2], False))
             count = 0
+            # apply_negative_z_force(ctrl, rcv)
             while True:
-                time.sleep(0.1)
+                start = time.time()
+                time.sleep(block_time)
                 # ret, image = cap.read()
                 # cv2.imshow('image',image)
                 # cv2.setMouseCallback('image', move_event)
@@ -151,8 +164,8 @@ def main():
                 pixel_coord[2] = protected_mouse_pos[2]
                 print("Consumer Side Pixel Coord: ", pixel_coord)
                 relative_coord = transforms.get_relative_coord(pixel_coord)
-                world_coord = transforms.pixel_to_world_coord(np.array(pixel_coord), solve_for_z=True)
-                # world_coord = (A @ world_coord[:2] + t)  * np.array([1,1.512])
+                world_coord = transforms.pixel_to_world_coord(np.array(pixel_coord), solve_for_z=False)
+                world_coord = (A @ world_coord[:2] + t)  * np.array([1,1.512])
                 # error = np.array(world_coord[:-1]) - obs[-3:]
                 # print(obs[-3:], world_coord[:-1], error)
                 # action = np.append(np.ones(6) * 300, world_coord[:-1], axis=0)
@@ -165,33 +178,81 @@ def main():
 
                 # force control, need it to keep it on the table
                 ### MUST RUN THIS BEFORE MOVEL ###
-                # apply_negative_z_force(ctrl, rcv)
+                apply_negative_z_force(ctrl, rcv)
 
                 # randomly sampling from a box in the workspace
-                x_min = -1.5
-                x_max = -0.1
-                y_min = -5
-                y_max = 5
+                # x_min = -1.5
+                # x_max = -0.1
+                # y_min = -5
+                # y_max = 5
 
-                x = np.random.random() * (x_max - x_min) + x_min
-                y = np.random.random() * (y_max - y_min) + y_min
+                # x_min = -0.8
+                # x_max = -0.4
+                # y_min = -0.30
+                # y_max = 0.30
 
-                world_coord[0] = np.clip(world_coord[0], x_min, x_max, )
-                world_coord[1] = np.clip(world_coord[1], y_min, y_max, )
-                world_coord[2] += 0.202086849139
-                print(world_coord)
-                x, y, _, _ = world_coord
+                x_min = -0.8
+                x_max = -0.4
+                y_min = -0.338
+                y_max = 0.383
 
+                
+
+                # x = np.random.random() * (x_max - x_min) + x_min
+                # y = np.random.random() * (y_max - y_min) + y_min
+
+                # world_coord[0] = np.clip(world_coord[0], x_min, x_max, )
+                # world_coord[1] = np.clip(world_coord[1], y_min, y_max, )
+                # world_coord[2] += 0.202086849139
+                # print(world_coord)
+                x, y = world_coord
+                true_pose = rcv.getTargetTCPPose()
+                true_speed = rcv.getTargetTCPSpeed()
+                true_force = rcv.getActualTCPForce()
+                measured_acc = rcv.getActualToolAccelerometer()
+                # print(true_pose)
+
+                ###### speedL ###### DOESN'T WORK
+                # spx, spy = (x - true_pose[0]) * xscale, (y - true_pose[1]) * yscale # Speed control
+                # spx, spy = np.clip(spx, -0.8, 0.8, ), np.clip(spy, -0.8, 0.8, )
+                # speed = [spx, spy, 0.0]
+                # print("speedl",speed,true_speed, acc, ctrl.speedL(speed, acc, time=10))
+
+                ###### movel ###### DOES WORK
                 # 0.32 here is a default z value. Force control allows us not to compute the *exact* z value here
                 pose = ([x, -y, 0.33, -0.05153677648744038, -3.0947520618606172, 0.], vel,acc)
+                # pose = ([x, -y, 0.43, -0.05153677648744038, -3.0947520618606172, 0.], vel,acc)
+                # print("movel",true_speed, ctrl.moveL(pose[0], vel, acc, asynchronous=False))
 
-                # print("movel", ctrl.moveL(pose[0], pose[1], pose[2], asynchronous=True))
+                ###### servoL ##### BETTER WORK
+                relx, rely = (x - true_pose[0]), (-y-true_pose[1])
+                rad = lambda x,y: np.sqrt(x ** 2 + y ** 2)
+                dist = rad(relx, rely)
+                polx, poly = min(dist, rmax_x) * relx / dist + true_pose[0], min(dist, rmax_y) * rely / dist + true_pose[1] # Project to circle
+                lastpose = [polx,poly]
+                polx = np.clip(polx, x_min, x_max, ) # Workspace limits
+                poly = np.clip(poly, y_min, y_max, )
+                srvpose = ([polx, poly, 0.33, -0.05153677648744038, -3.0947520618606172, 0.], vel,acc)
+                # print(pose, dist, relx, rely)
+
+                
+                # TODO: change of direction is currently very sudden, we need to tune that
+                print("servl", srvpose[0][1], true_speed, true_force, measured_acc, ctrl.servoL(srvpose[0], vel, acc, block_time, lookahead, gain))
+                measured_values.append([srvpose, true_pose, true_speed, true_force, measured_acc])
+                
 
                 # apply force control again just in case the arm leaves the table
                 # apply_negative_z_force(ctrl, rcv) 
+                print("time", time.time() - start)
 
-                print(rcv.getTargetTCPPose())
-
+                # print()
+                count += 1
+                print("COUNTER", count)
+                if count % 1000 == 0:
+                    with open(f'measured_values_{count}.pkl', 'wb') as file: 
+                        
+                        # A new file will be created 
+                        pickle.dump(measured_values, file) 
 
     finally:
         camera_process.kill()
