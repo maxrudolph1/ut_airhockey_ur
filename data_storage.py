@@ -12,7 +12,7 @@ from rtde_receive import RTDEReceiveInterface as RTDEReceive
 # Might be useful for robot proptioception recording
 # https://github.com/UniversalRobots/RTDE_Python_Client_Library/blob/main/examples/record.py
 
-def get_data(tidx, i, pose, speed, force, acc, desired_pose):
+def get_data(cur_time, tidx, i, pose, speed, force, acc, desired_pose):
 	# rcv = RTDEReceive("172.22.22.2")
 	# ret, image = cap.read()
 	# timestamp = time.time()
@@ -23,11 +23,34 @@ def get_data(tidx, i, pose, speed, force, acc, desired_pose):
 
 	# print(np.array([tidx]), np.array([i]), pose, speed, force, acc, desired_pose)
 
-	val = np.concatenate([np.array([tidx]), np.array([i]), np.array(pose), np.array(speed), np.array(force), np.array(acc), np.array(desired_pose[0])])
+	val = np.concatenate([np.array([cur_time]), np.array([tidx]), np.array([i]), np.array(pose), np.array(speed), np.array(force), np.array(acc), np.array(desired_pose[0])])
 	return val#, image
 
-def store_data(pth, tidx, count, imgs, vals):
+def store_data(pth, tidx, count, image_path, vals):
 	hf=h5py.File(os.path.join(pth, 'trajectory_data' + str(tidx) + '.hdf5'), 'w')
+
+	list_of_files = filter( lambda x: os.path.isfile 
+						(os.path.join(image_path, x)), 
+							os.listdir(image_path) ) 
+	list_of_files = list(list_of_files)
+	list_of_files.sort()
+
+	vidx = 0
+	imgs = list()
+	for fil, nextfil in zip(list_of_files, list_of_files[1:]):
+		tfil, tnextfil = float(fil[3:-4]), float(nextfil[3:-4])
+		tcur = vals[vidx][0]
+		if tfil < tcur < tnextfil:
+			if np.abs(tfil-tcur) >= np.abs(tnextfil - tcur):
+				print(nextfil, tcur)
+				imgs.append(imageio.imread(os.path.join(image_path, nextfil)))
+			else:
+				print(fil, tcur)
+				imgs.append(imageio.imread(os.path.join(image_path, fil)))
+			vidx += 1
+			if vidx == len(vals):
+				break
+
 
 	imgs, vals = np.stack(imgs, axis=0), np.stack(vals, axis=0)
 
@@ -38,6 +61,7 @@ def store_data(pth, tidx, count, imgs, vals):
 					compression="gzip",
 					compression_opts=9,
 					data = imgs)
+	print(vals)
 
 	hf.create_dataset("train_vals",
 					shape=vals.shape,

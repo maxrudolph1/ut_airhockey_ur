@@ -18,6 +18,7 @@ import termios
 import inspect
 import numpy as np
 import os
+import imageio
 
 def list_ports():
     """
@@ -105,14 +106,31 @@ upscale_constant = 3
 original_size = np.array([640, 480])
 visual_downscale_constant = 2
 
-def camera_callback(shared_array, shared_image):
+def save_callback(save_image_check):
     cap = cv2.VideoCapture(1)
 
     while True:
         start = time.time()
         ret, image = cap.read()
         image = cv2.rotate(image, cv2.ROTATE_180)
-        imageio.imsave()
+        if save_image_check[0] == 1: imageio.imsave("./temp/images/img" + str(time.time()) + ".jpg", image)
+        image = cv2.resize(image, (int(640*upscale_constant), int(480*upscale_constant)), 
+                    interpolation = cv2.INTER_LINEAR)
+        dst = cv2.warpPerspective(image,Mimg,original_size * upscale_constant)
+        showdst = cv2.resize(dst, (int(640*upscale_constant / visual_downscale_constant), int(480*upscale_constant / visual_downscale_constant)), 
+                    interpolation = cv2.INTER_LINEAR)
+        cv2.imshow('showdst',showdst)
+        cv2.waitKey(1)
+
+
+def camera_callback(shared_array, save_image_check):
+    cap = cv2.VideoCapture(1)
+
+    while True:
+        start = time.time()
+        ret, image = cap.read()
+        image = cv2.rotate(image, cv2.ROTATE_180)
+        if save_image_check[0] == 1: imageio.imsave("./temp/images/img" + str(time.time()) + ".jpg", image)
         # shared_image[:] = image.flatten()
         image = cv2.resize(image, (int(640*upscale_constant), int(480*upscale_constant)), 
                     interpolation = cv2.INTER_LINEAR)
@@ -129,7 +147,7 @@ def camera_callback(shared_array, shared_image):
         shared_array[1] = mousepos[1] * visual_downscale_constant
         shared_array[2] = mousepos[2] * visual_downscale_constant
         cv2.waitKey(1)
-        print("showtime", time.time() - start)
+        # print("showtime", time.time() - start)
 
 def move_event(event, x, y, flags, params):
     global mousepos
@@ -196,20 +214,72 @@ def compute_rect(x,y,true_pose, lims, move_lims):
     return recx, recy
 
 
+import shutil
+def clear_images():
+    folder = './temp/images/'
+    for filename in os.listdir(folder):
+        file_path = os.path.join(folder, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))
+
+
+def mimic_control(shared_array):
+    cap = cv2.VideoCapture(0)
+
+    Mimg = np.load('Mimg_tele.npy')
+
+    while True:
+        start = time.time()
+        ret, image = cap.read()
+        # image = cv2.rotate(image, cv2.ROTATE_180)
+        # shared_image[:] = image.flatten()
+        image = cv2.resize(image, (int(640*upscale_constant), int(480*upscale_constant)), 
+                    interpolation = cv2.INTER_LINEAR)
+        dst = cv2.warpPerspective(image,Mimg,original_size * upscale_constant)
+        showdst = cv2.resize(dst, (int(640*upscale_constant / visual_downscale_constant), int(480*upscale_constant / visual_downscale_constant)), 
+                    interpolation = cv2.INTER_LINEAR)
+
+        # dst = cv2.resize(dst, original_size.astype(int).tolist(), 
+        #             interpolation = cv2.INTER_LINEAR)
+        # cv2.imshow('image',image)
+        cv2.imshow('image',showdst)
+        cv2.setMouseCallback('image', move_event)
+        shared_array[0] = mousepos[0] * visual_downscale_constant
+        shared_array[1] = mousepos[1] * visual_downscale_constant
+        shared_array[2] = mousepos[2] * visual_downscale_constant
+        cv2.waitKey(1)
+        # print("showtime", time.time() - start)
+
 
 def main():
     ctrl = RTDEControl("172.22.22.2", rtde_frequency, RTDEControl.FLAG_USE_EXT_UR_CAP)
     rcv = RTDEReceive("172.22.22.2")
+    control_mode = 'mouse' # 'mimic'
+    control_mode = 'mimic'
 
     shared_mouse_pos = multiprocessing.Array("f", 3)
-    shared_image = multiprocessing.Array("f", 640*480* 3)
+    shared_image_check = multiprocessing.Array("f", 1)
     shared_mouse_pos[0] = 0
     shared_mouse_pos[1] = 0
     shared_mouse_pos[2] = 1
+    shared_image_check[0] = 0
     protected_mouse_pos = ProtectedArray(shared_mouse_pos)
-    protected_img = ProtectedArray(shared_image)
-    camera_process = multiprocessing.Process(target=camera_callback, args=(protected_mouse_pos,shared_image))
-    camera_process.start()
+    protected_img_check = ProtectedArray(shared_image_check)
+    if control_mode == 'mouse':
+        camera_process = multiprocessing.Process(target=camera_callback, args=(protected_mouse_pos,protected_img_check))
+        camera_process.start()
+    elif control_mode == 'mimic':
+        mimic_process = multiprocessing.Process(target=mimic_control, args=(protected_mouse_pos,))
+        mimic_process.start()
+        camera_process = multiprocessing.Process(target=save_callback, args=(protected_img_check,))
+        camera_process.start()
+
+    clear_images()
     # cap2 = cv2.VideoCapture(1)
 
     
@@ -248,11 +318,20 @@ def main():
     x_max_lim = -0.35
     y_min = -0.3382
     y_max = 0.388
-    cap = cv2.VideoCapture(1)
     try:
         with NonBlockingConsole() as nbc:
             i = 0
             time.sleep(1.0)
+            # tstart = int(input("Enter Trajectory Start Number: "))
+            list_of_files = filter( lambda x: os.path.isfile 
+                    (os.path.join(os.path.join("data","trajectories"), x)), 
+                        os.listdir(os.path.join("data","trajectories")) ) 
+            list_of_files = list(list_of_files)
+            list_of_files.sort()
+            if len(list_of_files) == 0:
+                tstart = 0
+            else:
+                tstart = int(list_of_files[-1][len("trajectory_data"):-5]) + 1
             num_trajectories = int(input("Enter number of Trajectories: "))
             pth = input("\nEnter Path (nothing for default): ")
             pth = os.path.join("data", "trajectories/") if pth == "" else pth
@@ -266,7 +345,7 @@ def main():
             # Setting a reset pose for the robot
             reset_pose = ([-0.68, 0., 0.33] + angle, vel,acc)
             # reset_pose = ([-0.68, 0., 0.43] + angle, vel,acc)
-            for tidx in range(num_trajectories):
+            for tidx in range(tstart, tstart + num_trajectories):
                 apply_negative_z_force(ctrl, rcv)
                 print("reset to initial pose:", ctrl.moveL(reset_pose[0], reset_pose[1], reset_pose[2], False))
                 count = 0
@@ -276,13 +355,15 @@ def main():
                 measured_values, frames = list(), list()
 
                 print("Press space to start")
-                for j in range(100000):
+                for j in range(10000):
                     time.sleep(0.01)  # To prevent high CPU usage
                     i += 1
                     if nbc.get_data() == ' ':  # x1b is ESC
                         break
+                protected_img_check[0] = 1
+                time.sleep(0.7)
 
-                while True:
+                for j in range(2000):
                     start = time.time()
                     time.sleep(block_time)
                     # ret, image = cap.read()
@@ -372,23 +453,21 @@ def main():
                     # recy = np.clip(recy, y_min, y_max, )
                     # x_min, x_max = x_min_lim, x_max_lim
                     # recx = np.clip(recx, x_min, x_max, ) # Workspace limits
-                    recx, recy = compute_rect(x, y, true_pose, lims, move_lims)
+                    # recx, recy = compute_rect(x, y, true_pose, lims, move_lims)
                     
                     z = computez(x)
-                    srvpose = ([recx, recy, 0.30] + angle, vel,acc)
-                    # srvpose = ([polx, poly, 0.30] + angle, vel,acc)
+                    # srvpose = ([recx, recy, 0.30] + angle, vel,acc)
+                    srvpose = ([polx, poly, 0.30] + angle, vel,acc)
                     # srvpose = ([polx, poly, z] + angle, vel,acc)
                     # print(pose, dist, relx, rely)
 
-                    values = get_data(tidx, rcv, true_pose, true_speed, true_force, measured_acc, srvpose)
-                    ret, img = cap.read()
-                    print(img)
+                    values = get_data(time.time(), tidx, count, true_pose, true_speed, true_force, measured_acc, srvpose)
                     measured_values.append(values), #frames.append(np.array(protected_img[:]).reshape(640,480,3))
                     
                     # TODO: change of direction is currently very sudden, we need to tune that
                     # print("servl", srvpose[0][1], true_speed, true_force, measured_acc, ctrl.servoL(srvpose[0], vel, acc, block_time, lookahead, gain))
-                    # ctrl.servoL(srvpose[0], vel, acc, block_time, lookahead, gain)
-                    # print("servl", srvpose[0], rcv.isProtectiveStopped())# , true_speed, true_force, measured_acc, )
+                    ctrl.servoL(srvpose[0], vel, acc, block_time, lookahead, gain)
+                    print("servl", pixel_coord, srvpose[0], rcv.isProtectiveStopped())# , true_speed, true_force, measured_acc, )
 
                     # print(z, true_force)
                     # measured_values.append([srvpose, true_pose, true_speed, true_force, measured_acc])
@@ -407,7 +486,9 @@ def main():
                             
                     #         # A new file will be created 
                     #         pickle.dump(measured_values, file)
-                store_data(pth, tidx, count, measured_values, frames)
+                protected_img_check[0] = 0
+                store_data(pth, tidx, count, os.path.join("temp", "images"), measured_values)
+                clear_images()
 
     finally:
         camera_process.kill()
