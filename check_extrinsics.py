@@ -8,15 +8,17 @@ def convert_camera_extrinsic(angles, translation):
 
     rot = R.from_euler("xyz", angles, degrees=True).as_matrix()
     flipy = np.eye(3)
-    flipy[1,1] = -1
+    # flipy[1,1] = -1
     rot = np.matmul(flipy, rot)
     # print(flipy, rot    )
     # print(np.matmul(rot, np.array([[1,0,0]]).T))
     return np.concatenate([rot, np.array([[translation[0]], [translation[1]], [translation[2]]])], axis=-1)
 
 def convert_tcp(tool_position):
-    angles = [180+14, -21, 0]
-    translation =[0.2286, 0.2286, 1.7907]
+    # angles = [180+14, -21, 0]
+    # translation =[0.2286, 0.2286, 1.7907]
+    angles = [-6, -24, 0]
+    translation = [-0.0889, 0.00635, 1.84]
     extrinsics = convert_camera_extrinsic(angles, translation)
 
     # print(extrinsics)

@@ -75,6 +75,7 @@ def camera_callback(shared_array):
 
     while True:
         ret, image = cap.read()
+        image = cv2.rotate(image, cv2.ROTATE_180)
         cv2.imshow('image',image)
         cv2.setMouseCallback('image', move_event)
         shared_array[0] = mousepos[0]
@@ -134,6 +135,7 @@ def main():
     block_time = 0.048 # time for the robot to reach a position (blocking)
     lookahead = 0.2 # smooths more with larger values (0.03-0.2)
     gain = 400 # 100-2000
+    angle = [-0.05153677648744038, -2.9847520618606172, 0.]
     measured_values = list()
     try:
         with NonBlockingConsole() as nbc:
@@ -146,8 +148,8 @@ def main():
             
 
             # Setting a reset pose for the robot
-            reset_pose = ([-0.68, 0., 0.33, -0.05153677648744038, -3.0947520618606172, 0.], vel,acc)
-            # reset_pose = ([-0.68, 0., 0.43, -0.05153677648744038, -3.0947520618606172, 0.], vel,acc)
+            reset_pose = ([-0.68, 0., 0.33] + angle, vel,acc)
+            # reset_pose = ([-0.68, 0., 0.43] + angle, vel,acc)
             print("reset to initial pose:", ctrl.moveL(reset_pose[0], reset_pose[1], reset_pose[2], False))
             count = 0
             # apply_negative_z_force(ctrl, rcv)
@@ -220,8 +222,8 @@ def main():
 
                 ###### movel ###### DOES WORK
                 # 0.32 here is a default z value. Force control allows us not to compute the *exact* z value here
-                pose = ([x, -y, 0.33, -0.05153677648744038, -3.0947520618606172, 0.], vel,acc)
-                # pose = ([x, -y, 0.43, -0.05153677648744038, -3.0947520618606172, 0.], vel,acc)
+                pose = ([x, -y, 0.33] + angle, vel,acc)
+                # pose = ([x, -y, 0.43] + angle, vel,acc)
                 # print("movel",true_speed, ctrl.moveL(pose[0], vel, acc, asynchronous=False))
 
                 ###### servoL ##### BETTER WORK
@@ -232,12 +234,12 @@ def main():
                 lastpose = [polx,poly]
                 polx = np.clip(polx, x_min, x_max, ) # Workspace limits
                 poly = np.clip(poly, y_min, y_max, )
-                srvpose = ([polx, poly, 0.33, -0.05153677648744038, -3.0947520618606172, 0.], vel,acc)
+                srvpose = ([polx, poly, 0.33] + angle, vel,acc)
                 # print(pose, dist, relx, rely)
 
                 
                 # TODO: change of direction is currently very sudden, we need to tune that
-                print("servl", srvpose[0][1], true_speed, true_force, measured_acc, ctrl.servoL(srvpose[0], vel, acc, block_time, lookahead, gain))
+                # print("servl", srvpose[0][1], true_speed, true_force, measured_acc, ctrl.servoL(srvpose[0], vel, acc, block_time, lookahead, gain))
                 measured_values.append([srvpose, true_pose, true_speed, true_force, measured_acc])
                 
 

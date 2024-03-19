@@ -56,10 +56,11 @@ def calibrate_and_save_parameters():
     for i in range(5):
         ret, frame = cap.read()
         img = copy.deepcopy(frame)
+        img = cv2.rotate(img, cv2.ROTATE_180)
         # cv2.imshow("frame", img)
         # cv2.waitKey(2000)
         # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)board.setLegacyPattern(True)
-        marker_corners, marker_ids, _ = cv2.aruco.detectMarkers(frame, dictionary, parameters=params)
+        marker_corners, marker_ids, _ = cv2.aruco.detectMarkers(img, dictionary, parameters=params)
 
         # If at least one marker is detected
         if len(marker_ids) > 0:
@@ -68,14 +69,15 @@ def calibrate_and_save_parameters():
             cv2.imwrite('detected_corners.png', img)
             cv2.waitKey(2000)
             charuco_retval, charuco_corners, charuco_ids = cv2.aruco.interpolateCornersCharuco(marker_corners, marker_ids, frame, board)
-            print(charuco_retval, charuco_corners, charuco_ids)
+            # print(charuco_retval, charuco_corners, charuco_ids)
             if charuco_retval:
                 all_charuco_corners.append(charuco_corners)
                 all_charuco_ids.append(charuco_ids)
-        frames.append(frame)
+        frames.append(img)
 
     # Calibrate camera
     retval, camera_matrix, dist_coeffs, rvecs, tvecs = cv2.aruco.calibrateCameraCharuco(all_charuco_corners, all_charuco_ids, board, frame.shape[:2], None, None)
+    print("rot, trans", rvecs, tvecs)
 
     # Save calibration data
     np.save('camera_matrix.npy', camera_matrix)
@@ -98,7 +100,7 @@ def run_intrinsics():
 
 if __name__ == "__main__":
 
-    # calibrate_and_save_parameters()
+    calibrate_and_save_parameters()
     run_intrinsics()
     # angles = [-14, 180+21, 0]
     # translation =[0.2286, 0.2286, 1.7907]

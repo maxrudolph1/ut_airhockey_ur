@@ -116,7 +116,8 @@ if __name__ == '__main__':
     
     
 
-    extrinsics = convert_camera_extrinsic([180+14, -21, 0], [0.2286, 0.2286, 1.7907])
+    # extrinsics = convert_camera_extrinsic([180+14, -21, 0], [0.2286, 0.2286, 1.7907])
+    extrinsics = convert_camera_extrinsic([0, 180+30, 0])
     extrinsics = np.concatenate([extrinsics, np.array([[0,0,0,1]])], axis=0)
     print(extrinsics.shape)
     intrinsics = np.load('camera_matrix.npy')
