@@ -12,7 +12,7 @@ from rtde_receive import RTDEReceiveInterface as RTDEReceive
 # Might be useful for robot proptioception recording
 # https://github.com/UniversalRobots/RTDE_Python_Client_Library/blob/main/examples/record.py
 
-def get_data(cur_time, tidx, i, pose, speed, force, acc, desired_pose):
+def get_data(cur_time, tidx, i, pose, speed, force, acc, desired_pose, estop):
 	# rcv = RTDEReceive("172.22.22.2")
 	# ret, image = cap.read()
 	# timestamp = time.time()
@@ -23,7 +23,7 @@ def get_data(cur_time, tidx, i, pose, speed, force, acc, desired_pose):
 
 	# print(np.array([tidx]), np.array([i]), pose, speed, force, acc, desired_pose)
 
-	val = np.concatenate([np.array([cur_time]), np.array([tidx]), np.array([i]), np.array(pose), np.array(speed), np.array(force), np.array(acc), np.array(desired_pose[0])])
+	val = np.concatenate([np.array([cur_time]), np.array([tidx]), np.array([i]), np.array([estop]).astype(float), np.array(pose), np.array(speed), np.array(force), np.array(acc), np.array(desired_pose[0])])
 	return val#, image
 
 def store_data(pth, tidx, count, image_path, vals):
@@ -51,7 +51,6 @@ def store_data(pth, tidx, count, image_path, vals):
 			if vidx == len(vals):
 				break
 
-
 	imgs, vals = np.stack(imgs, axis=0), np.stack(vals, axis=0)
 
 	print(imgs.shape, vals.shape)
@@ -68,9 +67,9 @@ def store_data(pth, tidx, count, image_path, vals):
 					compression="gzip",
 					compression_opts=9,
 					data = vals)
-
+	print(tidx, hf)
 
 
 if __name__ == "__main__":
-	save_data()
+	store_data()
 	

@@ -18,6 +18,7 @@ import termios
 import inspect
 import numpy as np
 import os
+from real_world_human_input.input_photo import find_red_hockey_paddle
 import imageio
 
 def list_ports():
@@ -105,6 +106,7 @@ def apply_negative_z_force(ctrl, rcv=None):
 upscale_constant = 3
 original_size = np.array([640, 480])
 visual_downscale_constant = 2
+save_downscale_constant = 2
 
 def save_callback(save_image_check):
     cap = cv2.VideoCapture(1)
@@ -113,11 +115,12 @@ def save_callback(save_image_check):
         start = time.time()
         ret, image = cap.read()
         image = cv2.rotate(image, cv2.ROTATE_180)
-        if save_image_check[0] == 1: imageio.imsave("./temp/images/img" + str(time.time()) + ".jpg", image)
+        if save_image_check[0] == 1: imageio.imsave("./temp/images/img" + str(time.time()) + ".jpg", cv2.resize(image, (int(640/save_downscale_constant), int(480/save_downscale_constant))))
         image = cv2.resize(image, (int(640*upscale_constant), int(480*upscale_constant)), 
                     interpolation = cv2.INTER_LINEAR)
         dst = cv2.warpPerspective(image,Mimg,original_size * upscale_constant)
-        showdst = cv2.resize(dst, (int(640*upscale_constant / visual_downscale_constant), int(480*upscale_constant / visual_downscale_constant)), 
+        dst = cv2.rotate(dst, cv2.ROTATE_90_CLOCKWISE)
+        showdst = cv2.resize(dst, (int(480*upscale_constant / visual_downscale_constant), int(640*upscale_constant / visual_downscale_constant)), 
                     interpolation = cv2.INTER_LINEAR)
         cv2.imshow('showdst',showdst)
         cv2.waitKey(1)
@@ -130,7 +133,7 @@ def camera_callback(shared_array, save_image_check):
         start = time.time()
         ret, image = cap.read()
         image = cv2.rotate(image, cv2.ROTATE_180)
-        if save_image_check[0] == 1: imageio.imsave("./temp/images/img" + str(time.time()) + ".jpg", image)
+        if save_image_check[0] == 1: imageio.imsave("./temp/images/img" + str(time.time()) + ".jpg", cv2.resize(image, (int(640/save_downscale_constant), int(480/save_downscale_constant))))
         # shared_image[:] = image.flatten()
         image = cv2.resize(image, (int(640*upscale_constant), int(480*upscale_constant)), 
                     interpolation = cv2.INTER_LINEAR)
@@ -176,12 +179,14 @@ def get_edge(x,y, w, h):
             print("low x", s, np.array([-w, -s * w]))
             return np.array([-w, -s * w])
     elif -w/2 <= h/(2*s) <= w/2:
+        s_r = (x)/(y) # slope
+        print(y)
         if y > 0:
-            print("high y", s, np.array([h * s, h]))
-            return np.array([h * s, h])
+            print("high y", s_r,y,h, np.array([h * s_r, h]))
+            return np.array([h * s_r, h])
         elif y < 0:
-            print("low y", s, np.array([-h * s, -h]))
-            return np.array([-h * s, -h])
+            print("low y", s_r, np.array([-h * s_r, -h]))
+            return np.array([-h * s_r, -h])
 
 def smoothen(history_pos, history_vel, relative, limits):
     # smoothens trajectories at the far end by lagging the inputs at the x endpoint
@@ -203,7 +208,8 @@ def compute_poly(x,y,true_pose, lims, move_lims):
     return polx, poly
 
 def compute_rect(x,y,true_pose, lims, move_lims):
-    relx, rely = (x - true_pose[0]), (-y-true_pose[1])
+    relx, rely = (x - true_pose[0]), (y-true_pose[1])
+    print((y, rely, true_pose[1]))
     x_min_lim, x_max_lim, y_min, y_max = lims
     rmax_x, rmax_y = move_lims
     recx, recy = get_edge(relx, rely, rmax_x, rmax_y)
@@ -231,7 +237,7 @@ def clear_images():
 def mimic_control(shared_array):
     cap = cv2.VideoCapture(0)
 
-    Mimg = np.load('Mimg_tele.npy')
+    Mimg_tele = np.load('Mimg_tele.npy')
 
     while True:
         start = time.time()
@@ -240,19 +246,30 @@ def mimic_control(shared_array):
         # shared_image[:] = image.flatten()
         image = cv2.resize(image, (int(640*upscale_constant), int(480*upscale_constant)), 
                     interpolation = cv2.INTER_LINEAR)
-        dst = cv2.warpPerspective(image,Mimg,original_size * upscale_constant)
+        dst = cv2.warpPerspective(image,Mimg_tele,original_size * upscale_constant)
         showdst = cv2.resize(dst, (int(640*upscale_constant / visual_downscale_constant), int(480*upscale_constant / visual_downscale_constant)), 
                     interpolation = cv2.INTER_LINEAR)
 
         # dst = cv2.resize(dst, original_size.astype(int).tolist(), 
         #             interpolation = cv2.INTER_LINEAR)
         # cv2.imshow('image',image)
-        cv2.imshow('image',showdst)
-        cv2.setMouseCallback('image', move_event)
-        shared_array[0] = mousepos[0] * visual_downscale_constant
-        shared_array[1] = mousepos[1] * visual_downscale_constant
-        shared_array[2] = mousepos[2] * visual_downscale_constant
+        x,y,changed_image = find_red_hockey_paddle(showdst)
+
+        # dst = cv2.resize(dst, original_size.astype(int).tolist(), 
+        #             interpolation = cv2.INTER_LINEAR)
+        # cv2.imshow('image',image)
+        cv2.imshow('image',changed_image)
+        shared_array[0] = y * visual_downscale_constant
+        shared_array[1] = x * visual_downscale_constant
         cv2.waitKey(1)
+
+
+        # cv2.imshow('image',showdst)
+        # cv2.setMouseCallback('image', move_event)
+        # shared_array[0] = mousepos[0] * visual_downscale_constant
+        # shared_array[1] = mousepos[1] * visual_downscale_constant
+        # shared_array[2] = mousepos[2] * visual_downscale_constant
+        # cv2.waitKey(1)
         # print("showtime", time.time() - start)
 
 
@@ -260,7 +277,7 @@ def main():
     ctrl = RTDEControl("172.22.22.2", rtde_frequency, RTDEControl.FLAG_USE_EXT_UR_CAP)
     rcv = RTDEReceive("172.22.22.2")
     control_mode = 'mouse' # 'mimic'
-    control_mode = 'mimic'
+    # control_mode = 'mimic'
 
     shared_mouse_pos = multiprocessing.Array("f", 3)
     shared_image_check = multiprocessing.Array("f", 1)
@@ -298,13 +315,14 @@ def main():
     rmax = 0.2 # polar coordinates maximum radius # TODO: make this an ellipsoid short edge y
     # rmax_x = 0.23
     # rmax_y = 0.12
-    # rmax_x = 0.23
-    # rmax_y = 0.11
-    rmax_x = 0.1
-    rmax_y = 0.05
+    rmax_x = 0.26
+    rmax_y = 0.12
+    # rmax_x = 0.1
+    # rmax_y = 0.05
     # rmax_x = 0.1
     # rmax_y = 0.05
     block_time = 0.048 # time for the robot to reach a position (blocking)
+    compute_time = 0.002 if control_mode == 'mimic' else 0.0
     lookahead = 0.2 # smooths more with larger values (0.03-0.2)
     gain = 700 # 100-2000
     # angle = [-0.05153677648744038, -2.9847520618606172, 0.]
@@ -316,8 +334,10 @@ def main():
     # max workspace limits
     x_min_lim = -0.8
     x_max_lim = -0.35
-    y_min = -0.3382
-    y_max = 0.388
+    # y_min = -0.3382
+    # y_max = 0.388
+    y_min = -0.3282
+    y_max = 0.378
     try:
         with NonBlockingConsole() as nbc:
             i = 0
@@ -327,14 +347,15 @@ def main():
                     (os.path.join(os.path.join("data","trajectories"), x)), 
                         os.listdir(os.path.join("data","trajectories")) ) 
             list_of_files = list(list_of_files)
-            list_of_files.sort()
+            list_of_files.sort(key = lambda x: int(x[len("trajectory_data"):-5]))
             if len(list_of_files) == 0:
                 tstart = 0
             else:
                 tstart = int(list_of_files[-1][len("trajectory_data"):-5]) + 1
             num_trajectories = int(input("Enter number of Trajectories: "))
-            pth = input("\nEnter Path (nothing for default): ")
+            pth = input("\nEnter Path (nothing for default, 0 for no saving): ")
             pth = os.path.join("data", "trajectories/") if pth == "" else pth
+            if pth == '0': pth = 0
             # for j in range(100000):
             #     time.sleep(0.01)  # To prevent high CPU usage
             #     i += 1
@@ -347,7 +368,8 @@ def main():
             # reset_pose = ([-0.68, 0., 0.43] + angle, vel,acc)
             for tidx in range(tstart, tstart + num_trajectories):
                 apply_negative_z_force(ctrl, rcv)
-                print("reset to initial pose:", ctrl.moveL(reset_pose[0], reset_pose[1], reset_pose[2], False))
+                reset_success = ctrl.moveL(reset_pose[0], reset_pose[1], reset_pose[2], False)
+                print("reset to initial pose:", reset_success)
                 count = 0
                 # apply_negative_z_force(ctrl, rcv)
                 # wait to start moving
@@ -360,12 +382,13 @@ def main():
                     i += 1
                     if nbc.get_data() == ' ':  # x1b is ESC
                         break
-                protected_img_check[0] = 1
+                protected_img_check[0] = 1 and bool(pth)
+                print(protected_img_check[0])
                 time.sleep(0.7)
 
                 for j in range(2000):
                     start = time.time()
-                    time.sleep(block_time)
+                    time.sleep(block_time - compute_time)
                     # ret, image = cap.read()
                     # cv2.imshow('image',image)
                     # cv2.setMouseCallback('image', move_event)
@@ -432,7 +455,7 @@ def main():
                     # pose = ([x, -y, 0.43] + angle, vel,acc)
                     # print("movel",true_speed, ctrl.moveL(pose[0], vel, acc, asynchronous=False))
 
-                    ###### servoL ##### BETTER WORK
+                    ###### servoL #####
                     lims = (x_min_lim, x_max_lim, y_min, y_max)
                     move_lims = (rmax_x, rmax_y)
                     polx, poly = compute_poly(x, y, true_pose, lims, move_lims)
@@ -453,21 +476,23 @@ def main():
                     # recy = np.clip(recy, y_min, y_max, )
                     # x_min, x_max = x_min_lim, x_max_lim
                     # recx = np.clip(recx, x_min, x_max, ) # Workspace limits
-                    # recx, recy = compute_rect(x, y, true_pose, lims, move_lims)
+                    recx, recy = compute_rect(x, -y, true_pose, lims, move_lims)
                     
                     z = computez(x)
-                    # srvpose = ([recx, recy, 0.30] + angle, vel,acc)
-                    srvpose = ([polx, poly, 0.30] + angle, vel,acc)
+                    srvpose = ([recx, recy, 0.30] + angle, vel,acc)
+                    # srvpose = ([polx, poly, 0.30] + angle, vel,acc)
                     # srvpose = ([polx, poly, z] + angle, vel,acc)
                     # print(pose, dist, relx, rely)
 
-                    values = get_data(time.time(), tidx, count, true_pose, true_speed, true_force, measured_acc, srvpose)
+                    values = get_data(time.time(), tidx, count, true_pose, true_speed, true_force, measured_acc, srvpose, rcv.isProtectiveStopped())
                     measured_values.append(values), #frames.append(np.array(protected_img[:]).reshape(640,480,3))
                     
                     # TODO: change of direction is currently very sudden, we need to tune that
                     # print("servl", srvpose[0][1], true_speed, true_force, measured_acc, ctrl.servoL(srvpose[0], vel, acc, block_time, lookahead, gain))
                     ctrl.servoL(srvpose[0], vel, acc, block_time, lookahead, gain)
-                    print("servl", pixel_coord, srvpose[0], rcv.isProtectiveStopped())# , true_speed, true_force, measured_acc, )
+                    # print("servl", np.abs(polx - true_pose[0]), np.abs(poly - true_pose[1]), pixel_coord, srvpose[0], rcv.isProtectiveStopped())# , true_speed, true_force, measured_acc, )
+                    print("servl", srvpose[0][:2], x,y, true_pose[:2], rcv.isProtectiveStopped())# , true_speed, true_force, measured_acc, )
+                    print("time", time.time() - start)
 
                     # print(z, true_force)
                     # measured_values.append([srvpose, true_pose, true_speed, true_force, measured_acc])
@@ -476,18 +501,17 @@ def main():
 
                     # apply force control again just in case the arm leaves the table
                     # apply_negative_z_force(ctrl, rcv) 
-                    print("time", time.time() - start)
 
                     # print()
                     count += 1
-                    print("COUNTER", count)
+                    # print("COUNTER", count)
                     # if count % 1000 == 0:
                     #     with open(f'measured_values_{count}.pkl', 'wb') as file: 
                             
                     #         # A new file will be created 
                     #         pickle.dump(measured_values, file)
                 protected_img_check[0] = 0
-                store_data(pth, tidx, count, os.path.join("temp", "images"), measured_values)
+                if pth: store_data(pth, tidx, count, os.path.join("temp", "images"), measured_values)
                 clear_images()
 
     finally:
