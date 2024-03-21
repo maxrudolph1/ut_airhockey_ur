@@ -6,7 +6,7 @@ rtde_frequency = 500.0
 from pynput import keyboard
 import multiprocessing
 import pickle
-from data_storage import store_data, get_data
+from robot_operation.data_storage import store_data, get_data
 import readline
 
 PRESS_VAL = ""

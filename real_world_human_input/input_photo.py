@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import sys
+import time
 # sys.path.append('../')
 # from transforms import RobosuiteTransforms, compute_affine_transform
 
@@ -14,9 +15,11 @@ def find_red_hockey_paddle(image):
     # image = cv2.imread(image_path)
 
     # Convert to HSV color space
+    image = cv2.resize(image, (int(320), int(240)), 
+                    interpolation = cv2.INTER_LINEAR)
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    hsv_image[:,:540] = 0
-    hsv_image[400:,:] = 0
+    hsv_image[:,:int(540 // 2)] = 0
+    hsv_image[int(400 // 2):,:] = 0
 
     # Define the range of red color in HSV
     # These values might need adjustment depending on the image
@@ -62,8 +65,6 @@ def find_red_hockey_paddle(image):
     # keypoints = detector.detect(mask)
     vals = np.where(mask > 0)
     x, y = int(np.round(np.median(vals[0]))),int(np.round(np.median(vals[1])))
-    # cv2.imshow('mask',mask)
-    # cv2.waitKey(1)
 
     # # Draw detected blobs as red circles
     # # cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS ensures the size of the circle corresponds to the size of blob
@@ -74,11 +75,11 @@ def find_red_hockey_paddle(image):
     # py = int(keypoints[0].pt[0])
     # px = int(keypoints[0].pt[1])
     # width=100
-    image[x-5:x+5, y-5:y+5, :] = 0
+    image[x-3:x+3, y-3:y+3, :] = 0
     # Save the image with keypoints
     # cv2.imwrite('output.jpg', image_with_keypoints)
 
-    return x,y,image
+    return x*2,y*2,image
 
 def find_green_hockey_puck(image):
     # Load the image
@@ -134,6 +135,14 @@ def find_green_hockey_puck(image):
 #     world_coord = transforms.pixel_to_world_coord(np.array(img_coord), solve_for_z=False)
 #     world_coord = (A @ world_coord[:2] + t)  * np.array([1,1.512])
 #     return world_coord
+
+cap = cv2.VideoCapture(0)
+while True:
+    start = time.time()
+    ret, image = cap.read()
+    print(image)
+    find_red_hockey_paddle(image)
+    print("time", time.time() - start)
 
 # Replace 'your_image_path.jpg' with the path to your image
 # image = cv2.imread(os.path.join("data", 'puck_test.jpg'))
