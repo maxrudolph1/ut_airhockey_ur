@@ -32,7 +32,7 @@ def mimic_control(shared_array):
         # dst = cv2.resize(dst, original_size.astype(int).tolist(), 
         #             interpolation = cv2.INTER_LINEAR)
         # cv2.imshow('image',image)
-        cv2.imshow('image',changed_image)
+        cv2.imshow('showed',showdst)
         shared_array[0] = x * visual_downscale_constant
         shared_array[1] = y * visual_downscale_constant
         cv2.waitKey(1)

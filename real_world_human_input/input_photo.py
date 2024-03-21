@@ -15,11 +15,19 @@ def find_red_hockey_paddle(image):
     # image = cv2.imread(image_path)
 
     # Convert to HSV color space
-    image = cv2.resize(image, (int(320), int(240)), 
+    # start = time.time()
+    # print(image.shape)
+    image = cv2.resize(image, (int(image.shape[1] / 4), int(image.shape[0] / 4)), 
                     interpolation = cv2.INTER_LINEAR)
+    # print(image.shape)
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    hsv_image[:,:int(540 // 2)] = 0
-    hsv_image[int(400 // 2):,:] = 0
+    # hsv_image[:,:int(540)] = 0
+    # hsv_image[int(400):,:] = 0
+    hsv_image[:,:int(540 / 4)] = 0
+    hsv_image[int(400 / 4):,:] = 0
+    # hsv_image[:,:120] = 0
+    # hsv_image[:,200:] = 0
+    # hsv_image[200:,:] = 0
 
     # Define the range of red color in HSV
     # These values might need adjustment depending on the image
@@ -32,6 +40,9 @@ def find_red_hockey_paddle(image):
     mask1 = cv2.inRange(hsv_image, lower_red1, upper_red1)
     mask2 = cv2.inRange(hsv_image, lower_red2, upper_red2)
     mask = mask1 + mask2
+    # cv2.imshow('hsv',hsv_image)
+    # cv2.imshow('mask',mask)
+    # cv2.waitKey(1)
 
 
 
@@ -78,8 +89,10 @@ def find_red_hockey_paddle(image):
     image[x-3:x+3, y-3:y+3, :] = 0
     # Save the image with keypoints
     # cv2.imwrite('output.jpg', image_with_keypoints)
+    # print("inrange", time.time()-start)
+    return x*4,y*4,image
+    return x,y,image
 
-    return x*2,y*2,image
 
 def find_green_hockey_puck(image):
     # Load the image
@@ -136,13 +149,13 @@ def find_green_hockey_puck(image):
 #     world_coord = (A @ world_coord[:2] + t)  * np.array([1,1.512])
 #     return world_coord
 
-cap = cv2.VideoCapture(0)
-while True:
-    start = time.time()
-    ret, image = cap.read()
-    print(image)
-    find_red_hockey_paddle(image)
-    print("time", time.time() - start)
+# cap = cv2.VideoCapture(1)
+# while True:
+#     start = time.time()
+#     ret, image = cap.read()
+#     # print("cam", time.time() - start)
+#     find_red_hockey_paddle(image)
+    # print("time", time.time() - start)
 
 # Replace 'your_image_path.jpg' with the path to your image
 # image = cv2.imread(os.path.join("data", 'puck_test.jpg'))
