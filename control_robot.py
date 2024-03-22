@@ -100,7 +100,7 @@ def main(control_mode, control_type, autonomous_model = None):
     
     # may need to calibrate angle of end effector
     # angle = [-0.05153677648744038, -2.9847520618606172, 0.]
-    angle = [-0.00153677648744038, -3.0647520618606172, 0.]
+    angle = [-0.00153677648744038, -3.0547520618606172, 0.]
 
     # if z is used to compute angles
     zslope = 0.02577
@@ -128,7 +128,7 @@ def main(control_mode, control_type, autonomous_model = None):
     # y_max = 0.30
 
     # robot reset pose
-    reset_pose = ([-0.68, 0., 0.36] + angle, vel,acc)
+    reset_pose = ([-0.68, 0., 0.34] + angle, vel,acc)
 
     try:
         with NonBlockingConsole() as nbc:
@@ -165,7 +165,6 @@ def main(control_mode, control_type, autonomous_model = None):
                 print("reset to initial pose:", reset_success)
                 count = 0
                 time.sleep(0.7)
-
                 # wait to start moving
                 print("Press space to start")
                 for j in range(10000):
@@ -243,6 +242,7 @@ def main(control_mode, control_type, autonomous_model = None):
                     # print("time", time.time() - start)
                     count += 1
                 protected_img_check[0] = 0
+                ctrl.servoStop(8)
                 if pth: 
                     store_check = input("\nDo you want to store your data? (y/n): ")
                     if store_check == 'y': store_data(pth, tidx, count, os.path.join("temp", "images"), images, measured_values)
@@ -258,7 +258,7 @@ def main(control_mode, control_type, autonomous_model = None):
 
 
 if __name__ == "__main__":
-    control_mode = 'mimic' # mouse, mimic, keyboard, RL, BC
+    control_mode = 'mouse' # mouse, mimic, keyboard, RL, BC
     control_type = 'rect' # rect, pol or prim
 
     main(control_mode, control_type, AutonomousModel())

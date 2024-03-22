@@ -94,7 +94,7 @@ def find_red_hockey_paddle(image):
     return x,y,image
 
 
-def find_green_hockey_puck(image):
+def find_red_hockey_puck(image):
     # Load the image
     # 
 
@@ -106,15 +106,21 @@ def find_green_hockey_puck(image):
     # These values might need adjustment depending on the image
     # lower_green1 = np.array([100, 10, 25])
     # upper_green1 = np.array([120, 50, 50])
-    lower_green1 = np.array([100, 10, 25])
-    upper_green1 = np.array([120, 255, 255])
-    lower_green2 = np.array([170, 120, 70])
-    upper_green2 = np.array([180, 255, 255])
+    # lower_green1 = np.array([100, 10, 25])
+    # upper_green1 = np.array([120, 255, 255])
+    # lower_green2 = np.array([170, 120, 70])
+    # upper_green2 = np.array([180, 255, 255])
+    # refined_lower_green = np.array([30, 40, 40])  # Lower saturation and value
+    # refined_upper_green = np.array([80, 255, 255])
+    lower_red1 = np.array([0, 120, 70])
+    upper_red1 = np.array([10, 255, 255])
+    lower_red2 = np.array([170, 120, 70])
+    upper_red2 = np.array([180, 255, 255])
 
     # Create a mask for green color
-    mask = cv2.inRange(hsv_image, lower_green1, upper_green1)
-    # mask2 = cv2.inRange(hsv_image, lower_green2, upper_green2)
-    # mask = mask1 + mask2
+    mask1 = cv2.inRange(hsv_image, lower_red1, upper_red1)
+    mask2 = cv2.inRange(hsv_image, lower_red2, upper_red2)
+    mask = mask1 + mask2
 
 
 
