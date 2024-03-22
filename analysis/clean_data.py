@@ -30,21 +30,24 @@ def load_hdf5_to_dict(datapath):
 
     return data_dict
 
-def write_trajectory(pth, tidx, imgs, vals):
-	with h5py.File(os.path.join(pth, 'trajectory_data' + str(tidx) + '.hdf5'), 'w') as hf:
-		hf.create_dataset("train_img",
-						shape=imgs.shape,
-						compression="gzip",
-						compression_opts=9,
-						data = imgs)
-		print(vals)
+def write_trajectory(pth, tidx, imgs, vals, metadata=None):
+    with h5py.File(os.path.join(pth, 'trajectory_data' + str(tidx) + '.hdf5'), 'w') as hf:
+        hf.create_dataset("train_img",
+                        shape=imgs.shape,
+                        compression="gzip",
+                        compression_opts=9,
+                        data = imgs)
+        print(vals)
 
-		hf.create_dataset("train_vals",
-						shape=vals.shape,
-						compression="gzip",
-						compression_opts=9,
-						data = vals)
-		print(tidx, hf)
+        hf.create_dataset("train_vals",
+                        shape=vals.shape,
+                        compression="gzip",
+                        compression_opts=9,
+                        data = vals)
+        print(tidx, hf)
+        for key in metadata.keys():
+            hf[key] = metadata[key]
+
 
 
 def clean_data(pth, target):
@@ -99,7 +102,10 @@ def clean_data(pth, target):
             if key == 114:
                 end = idx
         print("final statistics", tidx, keep, start, end)
-        if keep: write_trajectory(target, tidx, frames[start:end], dataset_dict['train_vals'][start:end])
+        if keep: 
+            nh = input("\nRecord the number of hits: ")
+            occ = input("\nRecord 1 if occluded, 0 if not: ")
+            write_trajectory(target, tidx, frames[start:end], dataset_dict['train_vals'][start:end], metadata={"num_hits": int(nh),"occlusions": int(occ)})
 
 def visualize_clean_data(target, tidx):
     dataset_dict = load_hdf5_to_dict(os.path.join(target, "trajectory_data" + str(tidx) + ".hdf5"))
@@ -124,6 +130,8 @@ def visualize_clean_data(target, tidx):
     # invisible puck
     # end after the robot finishes the last hit and the puck is coming back down when the human misses the puck
     # the camera might say it is not responding, you don't need to close it
+    # The script also asks for the number of hits and whether the puck is occluded (blocked) at any point in the cleaned segment,
+        # so look out for those things
         
 
 # usage: left, right advance and regress the frames respectively
@@ -136,9 +144,9 @@ if __name__ == '__main__':
 # CHANGE THE FOLLOWING TO YOUR PATH AND TARGET
     pth = "data/mouse/trajectories/"
     target = "data/mouse/cleaned/"
-    # clean_data(pth, target)
+    clean_data(pth, target)
 # UNCOMMENT and COMMENT OUT ABOVE if you just want to visualize some cleaned data
     # I left some examples in data/mouse/cleaned
     # press y to stop visualizing cleaned data
-    tidx = 34
-    visualize_clean_data(target, tidx)
+    # tidx = 34
+    # visualize_clean_data(target, tidx)

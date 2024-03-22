@@ -100,7 +100,7 @@ def main(control_mode, control_type, autonomous_model = None):
     
     # may need to calibrate angle of end effector
     # angle = [-0.05153677648744038, -2.9847520618606172, 0.]
-    angle = [-0.00153677648744038, -3.0547520618606172, 0.]
+    angle = [-0.00153677648744038, -3.0647520618606172, 0.]
 
     # if z is used to compute angles
     zslope = 0.02577
@@ -218,7 +218,7 @@ def main(control_mode, control_type, autonomous_model = None):
                     if control_mode in ["mouse", "mimic"]:
                         x, y = (pixel_coord - offset_constants) * 0.001
                     elif control_mode in ["RL", "BC"]:
-                        x, y = autonomous_model.take_action(true_pose, true_speed, true_force, measured_acc, image) # TODO: add image handling
+                        x, y = autonomous_model.take_action(true_pose, true_speed, true_force, measured_acc, srvpose, rcv.isProtectiveStopped(), image) # TODO: add image handling
 
                     ###### servoL #####
                     if control_type == "pol":
