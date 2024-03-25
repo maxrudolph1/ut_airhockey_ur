@@ -28,7 +28,6 @@ def get_data(cur_time, tidx, i, pose, speed, force, acc, desired_pose, estop):
 	return val#, image
 
 def store_data(pth, tidx, count, image_path, images, vals):
-	hf=h5py.File(os.path.join(pth, 'trajectory_data' + str(tidx) + '.hdf5'), 'w')
 
 	if len(images) == 0:
 		list_of_files = filter( lambda x: os.path.isfile 
@@ -50,6 +49,8 @@ def store_data(pth, tidx, count, image_path, images, vals):
 					print(fil, tcur)
 					imgs.append(imageio.imread(os.path.join(image_path, fil)))
 				vidx += 1
+				# cv2.imshow('hsv',imgs[-1])
+				# cv2.waitKey(1)
 				if vidx == len(vals):
 					break
 	else:
@@ -60,20 +61,23 @@ def store_data(pth, tidx, count, image_path, images, vals):
 	vals = np.stack(vals, axis=0)
 
 	print(imgs.shape, vals.shape)
+	write_trajectory(pth, tidx, imgs, vals)
 
-	hf.create_dataset("train_img",
-					shape=imgs.shape,
-					compression="gzip",
-					compression_opts=9,
-					data = imgs)
-	print(vals)
+def write_trajectory(pth, tidx, imgs, vals):
+	with h5py.File(os.path.join(pth, 'trajectory_data' + str(tidx) + '.hdf5'), 'w') as hf:
+		hf.create_dataset("train_img",
+						shape=imgs.shape,
+						compression="gzip",
+						compression_opts=9,
+						data = imgs)
+		print(vals)
 
-	hf.create_dataset("train_vals",
-					shape=vals.shape,
-					compression="gzip",
-					compression_opts=9,
-					data = vals)
-	print(tidx, hf)
+		hf.create_dataset("train_vals",
+						shape=vals.shape,
+						compression="gzip",
+						compression_opts=9,
+						data = vals)
+		print(tidx, hf)
 
 def clear_images():
     folder = './temp/images/'

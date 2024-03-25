@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(1)
 
 ret, image = cap.read()
 image = cv2.rotate(image, cv2.ROTATE_180)
@@ -21,7 +21,8 @@ pts1 *= upscale_constant
 # Size of the Transformed Image
 # pts2 = np.float32([[400,400],[400,100],[550,100],[550,400]]), [-548,-206], [-541, 259]
 # pts2 = np.float32([[-829,389],[-834,-337],[-408,-345],[-398,391]])
-pts2 = np.float32([[-829,379],[-834,-347],[-408,-355],[-398,381]])
+# pts2 = np.float32([[-829,379],[-834,-327],[-408,-355],[-398,381]])
+pts2 = np.float32([[-829,359],[-834,-377],[-408,-385],[-398,351]])
 Mrob = cv2.getPerspectiveTransform(pts1,pts2)
 for val in pts1:
     cv2.circle(image,(int(val[0]),int(val[1])),5,(0,255,0),-1)
