@@ -12,6 +12,7 @@ upscale_constant = 3
 original_size = np.array([640, 480])
 visual_downscale_constant = 2
 save_downscale_constant = 2
+offset_constants = np.array((2100, 500))
 
 
 def homography_transform(image, get_save=True):

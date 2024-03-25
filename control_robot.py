@@ -244,7 +244,9 @@ def main(control_mode, control_type, load_path = ""):
                     
                     # TODO: change of direction is currently very sudden, we need to tune that
                     # print("servl", srvpose[0][1], true_speed, true_force, measured_acc, ctrl.servoL(srvpose[0], vel, acc, block_time, lookahead, gain))
-                    ctrl.servoL(srvpose[0], vel, acc, block_time, lookahead, gain)
+                    
+                    # ctrl.servoL(srvpose[0], vel, acc, block_time, lookahead, gain)
+
                     # print("servl", np.abs(polx - true_pose[0]), np.abs(poly - true_pose[1]), pixel_coord, srvpose[0], rcv.isProtectiveStopped())# , true_speed, true_force, measured_acc, )
                     # print("servl", srvpose[0][:2], x,y, true_pose[:2], rcv.isProtectiveStopped())# , true_speed, true_force, measured_acc, )
                     # print("time", time.time() - start)
@@ -259,7 +261,7 @@ def main(control_mode, control_type, load_path = ""):
                             tidx += 1
                 else:
                     tidx += 1
-                if control_mode in "RL": autonomous_model.train(measured_values, images)
+                if control_mode in "RL": autonomous_model.train(measured_values, images, puck_history=puck_history[5:])
                 clear_images()
 
     finally:

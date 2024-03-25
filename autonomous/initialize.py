@@ -9,7 +9,7 @@ def initialize_agent(control_mode, load_path):
     if control_mode == "BC":
         pass
     if control_mode == 'rnet':
-        agent = RandomAgent([512], puck_detector=None)
+        agent = RandomAgent([512], puck_detector=puck_detector)
     if len(load_path) > 0:
         agent.load(load_path)
     return agent

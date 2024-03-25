@@ -44,7 +44,7 @@ class RandomAgent(AutonomousModel):
                                      np.array(puck), np.array(puck_history[-1]), np.array(puck_history[-2])]), axis=0)
         netout = self.network(prop_input)
         x,y = pytorch_model.unwrap(netout[0])
-        move_vector = np.array((x,-y)) * np.array(move_lims) / 3
+        move_vector = np.array((x,-y)) * np.array(move_lims) / 5
         delta_vector = move_vector + pose[:2]
         # x, y = clip_limits(delta_vector[0], delta_vector[1],lims)
         print(netout, move_vector, delta_vector,pose[:2],  x,y)
