@@ -24,7 +24,8 @@ def find_red_hockey_paddle(image):
     # hsv_image[:,:int(540)] = 0
     # hsv_image[int(400):,:] = 0
     hsv_image[:,:int(540 / 4)] = 0
-    hsv_image[int(400 / 4):,:] = 0
+    hsv_image[int(500 / 4):,:] = 0
+
     # hsv_image[:,:120] = 0
     # hsv_image[:,200:] = 0
     # hsv_image[200:,:] = 0
@@ -41,7 +42,7 @@ def find_red_hockey_paddle(image):
     mask2 = cv2.inRange(hsv_image, lower_red2, upper_red2)
     mask = mask1 + mask2
     # cv2.imshow('hsv',hsv_image)
-    # cv2.imshow('mask',mask)
+    # # cv2.imshow('mask',mask)
     # cv2.waitKey(1)
 
 

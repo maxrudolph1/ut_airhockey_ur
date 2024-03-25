@@ -14,70 +14,82 @@ from rtde_receive import RTDEReceiveInterface as RTDEReceive
 # https://github.com/UniversalRobots/RTDE_Python_Client_Library/blob/main/examples/record.py
 
 def get_data(cur_time, tidx, i, pose, speed, force, acc, desired_pose, estop):
-	# rcv = RTDEReceive("172.22.22.2")
-	# ret, image = cap.read()
-	# timestamp = time.time()
-	# print(image.shape)
-	# # cv2.imshow('capture',image)
-	# # cv2.waitKey(1)
-	# image = None
+    # rcv = RTDEReceive("172.22.22.2")
+    # ret, image = cap.read()
+    # timestamp = time.time()
+    # print(image.shape)
+    # # cv2.imshow('capture',image)
+    # # cv2.waitKey(1)
+    # image = None
 
-	# print(np.array([tidx]), np.array([i]), pose, speed, force, acc, desired_pose)
+    # print(np.array([tidx]), np.array([i]), pose, speed, force, acc, desired_pose)
 
-	val = np.concatenate([np.array([cur_time]), np.array([tidx]), np.array([i]), np.array([estop]).astype(float), np.array(pose), np.array(speed), np.array(force), np.array(acc), np.array(desired_pose[0])])
-	return val#, image
+    val = np.concatenate([np.array([cur_time]), # 0
+                       np.array([tidx]), # 1 
+                       np.array([i]), # 2 
+                       np.array([estop]).astype(float), # 3
+                       np.array(pose), # 6
+                       np.array(speed), # 6
+                       np.array(force), # 6
+                       np.array(acc), # 6
+                       np.array(desired_pose[0])]) # 6
+    return val#, image
 
 def store_data(pth, tidx, count, image_path, images, vals):
 
-	if len(images) == 0:
-		list_of_files = filter( lambda x: os.path.isfile 
-							(os.path.join(image_path, x)), 
-								os.listdir(image_path) ) 
-		list_of_files = list(list_of_files)
-		list_of_files.sort()
+    if len(images) == 0:
+        list_of_files = filter( lambda x: os.path.isfile 
+                            (os.path.join(image_path, x)), 
+                                os.listdir(image_path) ) 
+        list_of_files = list(list_of_files)
+        list_of_files.sort()
 
-		vidx = 0
-		imgs = list()
-		for fil, nextfil in zip(list_of_files, list_of_files[1:]):
-			tfil, tnextfil = float(fil[3:-4]), float(nextfil[3:-4])
-			tcur = vals[vidx][0]
-			if tfil < tcur < tnextfil:
-				if np.abs(tfil-tcur) >= np.abs(tnextfil - tcur):
-					print(nextfil, tcur)
-					imgs.append(imageio.imread(os.path.join(image_path, nextfil)))
-				else:
-					print(fil, tcur)
-					imgs.append(imageio.imread(os.path.join(image_path, fil)))
-				vidx += 1
-				# cv2.imshow('hsv',imgs[-1])
-				# cv2.waitKey(1)
-				if vidx == len(vals):
-					break
-	else:
-		imgs = images
+        vidx = 0
+        imgs = list()
+        for fil, nextfil in zip(list_of_files, list_of_files[1:]):
+            tfil, tnextfil = float(fil[3:-4]), float(nextfil[3:-4])
+            tcur = vals[vidx][0]
+            if tfil < tcur < tnextfil:
+                if np.abs(tfil-tcur) >= np.abs(tnextfil - tcur):
+                    print(nextfil, tcur)
+                    imgs.append(imageio.imread(os.path.join(image_path, nextfil)))
+                else:
+                    print(fil, tcur)
+                    imgs.append(imageio.imread(os.path.join(image_path, fil)))
+                vidx += 1
+                # cv2.imshow('hsv',imgs[-1])
+                # cv2.waitKey(1)
+                if vidx == len(vals):
+                    break
+    else:
+        imgs = images
 
-	imgs = np.stack(imgs, axis=0)
-	
-	vals = np.stack(vals, axis=0)
+    imgs = np.stack(imgs, axis=0)
+    
+    vals = np.stack(vals, axis=0)
+    if imgs.shape[0] != vals.shape[0]:
+        print("MISALIGNED")
+        return False
 
-	print(imgs.shape, vals.shape)
-	write_trajectory(pth, tidx, imgs, vals)
+    print(imgs.shape, vals.shape)
+    write_trajectory(pth, tidx, imgs, vals)
+    return True
 
 def write_trajectory(pth, tidx, imgs, vals):
-	with h5py.File(os.path.join(pth, 'trajectory_data' + str(tidx) + '.hdf5'), 'w') as hf:
-		hf.create_dataset("train_img",
-						shape=imgs.shape,
-						compression="gzip",
-						compression_opts=9,
-						data = imgs)
-		print(vals)
+    with h5py.File(os.path.join(pth, 'trajectory_data' + str(tidx) + '.hdf5'), 'w') as hf:
+        hf.create_dataset("train_img",
+                        shape=imgs.shape,
+                        compression="gzip",
+                        compression_opts=9,
+                        data = imgs)
+        print(vals)
 
-		hf.create_dataset("train_vals",
-						shape=vals.shape,
-						compression="gzip",
-						compression_opts=9,
-						data = vals)
-		print(tidx, hf)
+        hf.create_dataset("train_vals",
+                        shape=vals.shape,
+                        compression="gzip",
+                        compression_opts=9,
+                        data = vals)
+        print(tidx, hf)
 
 def clear_images():
     folder = './temp/images/'
@@ -95,5 +107,5 @@ def clear_images():
 
 
 if __name__ == "__main__":
-	store_data()
-	
+    store_data()
+    

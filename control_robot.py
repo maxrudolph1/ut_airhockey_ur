@@ -21,7 +21,7 @@ from robot_operation.multiprocessing import ProtectedArray, NonBlockingConsole
 from robot_operation.teleoperation import camera_callback, mimic_control, save_callback, Mimg, save_collect
 from robot_operation.robot_control import apply_negative_z_force, MotionPrimitive
 from robot_operation.coordinate_transform import compute_pol, compute_rect
-from robot_operation.autonomous import AutonomousModel
+from autonomous.initialize import initialize_agent
 
 
 
@@ -31,7 +31,7 @@ from check_extrinsics import convert_camera_extrinsic
 
 import shutil
 
-def main(control_mode, control_type, autonomous_model = None):
+def main(control_mode, control_type, load_path = ""):
     '''
         @param control_mode: Where robot actions are generated: teleoperation_modes = mouse, mimic, keyboard, autonomous = BC, RL
         @param control_type: How the robot is controlled (action space), options: rect, pol, prim
@@ -40,7 +40,10 @@ def main(control_mode, control_type, autonomous_model = None):
     rcv = RTDEReceive("172.22.22.2")
 
     teleoperation_modes = ['mouse', 'mimic', 'keyboard']
-    autonomous_modes = ['BC', 'RL']
+    autonomous_modes = ['BC', 'RL', 'rnet']
+
+    if control_mode in autonomous_modes:
+        autonomous_model = initialize_agent(control_mode, load_path)
     # control_mode = 'mouse' # 'mimic'
     # control_mode = 'mimic'
 
@@ -87,7 +90,8 @@ def main(control_mode, control_type, autonomous_model = None):
     # rmax_y = 0.05
 
     # servol control parameters and general frame rate (20Hz)
-    block_time = 0.05 # time for the robot to reach a position (blocking)
+    block_time = 0.049 # time for the robot to reach a position (blocking)
+    runtime = 0
     if control_mode == "mimic":
         compute_time = 0.004
     elif control_mode == "mouse":
@@ -129,6 +133,8 @@ def main(control_mode, control_type, autonomous_model = None):
 
     # robot reset pose
     reset_pose = ([-0.68, 0., 0.34] + angle, vel,acc)
+    lims = (x_min_lim, x_max_lim, y_min, y_max)
+    move_lims = (rmax_x, rmax_y)
 
     try:
         with NonBlockingConsole() as nbc:
@@ -157,7 +163,8 @@ def main(control_mode, control_type, autonomous_model = None):
             if pth == '0': pth = 0
 
             images, image = list(), None
-            for tidx in range(tstart, tstart + num_trajectories):
+            tidx = tstart
+            while tidx < tstart + num_trajectories:
 
                 # Setting a reset pose for the robot
                 apply_negative_z_force(ctrl, rcv)
@@ -180,12 +187,15 @@ def main(control_mode, control_type, autonomous_model = None):
                 count = 0
                 time.sleep(0.7)
 
-
                 print("To exit press 'q'")
                 measured_values, frames = list(), list()
+                puck_history = [(-1.5,0,0) for i in range(5)] # pretend that the puck starts at the other end of the table, but is occluded, for 5 frames
+                total = time.time()
                 for j in range(2000):
+                    time.sleep(max(0,block_time - runtime))
+                    print(time.time() - total, runtime)
+                    total = time.time()
                     start = time.time()
-                    time.sleep(block_time - compute_time)
                     # ret, image = cap.read()
                     # cv2.imshow('image',image)
                     # cv2.setMouseCallback('image', move_event)
@@ -212,17 +222,15 @@ def main(control_mode, control_type, autonomous_model = None):
                     true_speed = rcv.getTargetTCPSpeed()
                     true_force = rcv.getActualTCPForce()
                     measured_acc = rcv.getActualToolAccelerometer()
-                    lims = (x_min_lim, x_max_lim, y_min, y_max)
-                    move_lims = (rmax_x, rmax_y)
                     
                     if control_mode in ["mouse", "mimic"]:
                         x, y = (pixel_coord - offset_constants) * 0.001
-                    elif control_mode in ["RL", "BC"]:
-                        x, y = autonomous_model.take_action(true_pose, true_speed, true_force, measured_acc, srvpose, rcv.isProtectiveStopped(), image) # TODO: add image handling
-
+                    elif control_mode in ["RL", "BC", 'rnet']:
+                        x,y, puck = autonomous_model.take_action(true_pose, true_speed, true_force, measured_acc, rcv.isProtectiveStopped(), image, puck_history, lims, move_lims) # TODO: add image handling
+                        puck_history.append(puck)
                     ###### servoL #####
                     if control_type == "pol":
-                        polx, poly = compute_pol(x, y, true_pose, lims, move_lims)
+                        polx, poly = compute_pol(x, -y, true_pose, lims, move_lims)
                         srvpose = ([polx, poly, 0.30] + angle, vel,acc)
                     elif control_type == "rect":
                         recx, recy = compute_rect(x, -y, true_pose, lims, move_lims)
@@ -241,11 +249,16 @@ def main(control_mode, control_type, autonomous_model = None):
                     # print("servl", srvpose[0][:2], x,y, true_pose[:2], rcv.isProtectiveStopped())# , true_speed, true_force, measured_acc, )
                     # print("time", time.time() - start)
                     count += 1
+                    runtime = time.time() - start
                 protected_img_check[0] = 0
-                ctrl.servoStop(8)
+                ctrl.servoStop(6)
                 if pth: 
-                    store_check = input("\nDo you want to store your data? (y/n): ")
-                    if store_check == 'y': store_data(pth, tidx, count, os.path.join("temp", "images"), images, measured_values)
+                    store_check = input("\nDo you want to store traj " + str(tidx) + "? (y/n): ")
+                    if store_check == 'y': 
+                        if store_data(pth, tidx, count, os.path.join("temp", "images"), images, measured_values):
+                            tidx += 1
+                else:
+                    tidx += 1
                 if control_mode in "RL": autonomous_model.train(measured_values, images)
                 clear_images()
 
@@ -258,7 +271,7 @@ def main(control_mode, control_type, autonomous_model = None):
 
 
 if __name__ == "__main__":
-    control_mode = 'mouse' # mouse, mimic, keyboard, RL, BC
+    control_mode = 'rnet' # mouse, mimic, keyboard, RL, BC, rnet
     control_type = 'rect' # rect, pol or prim
 
-    main(control_mode, control_type, AutonomousModel())
+    main(control_mode, control_type, "")
