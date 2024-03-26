@@ -10,6 +10,15 @@ def mlp(sizes, activation=nn.Tanh, output_activation=nn.Identity):
         layers += [nn.Linear(sizes[j], sizes[j + 1]), act()]
     return nn.Sequential(*layers)
 
+def resnet(num_outputs, output_activation=nn.Identity, pretrained=True):
+    model = torch.hub.load('pytorch/vision:v0.9.0', 'resnet18', pretrained=pretrained)
+    model.fc = nn.Sequential(
+        nn.Linear(model.fc.in_features, num_outputs),
+        output_activation()
+    )
+    return model
+    
+
 class ActorCritic(nn.Module):
     def __init__(self, obs_dim, act_dim, hidden_sizes, activation, device):
         super().__init__()

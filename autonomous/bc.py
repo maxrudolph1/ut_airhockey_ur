@@ -7,11 +7,11 @@ import numpy as np
 import h5py
 
 from agent import Agent
-from models import mlp
+from models import mlp, resnet
 from buffer import BCBuffer
 
 class BehaviorCloning(Agent):
-    def __init__(self, hidden_sizes, device, learning_rate, batch_size, num_iter, img_size=(224, 224), puck_history_len = 5, target_config='train_ppo.yaml', dataset_path='/datastor1/calebc/public/data', data_mode='mouse'):
+    def __init__(self, hidden_sizes, device, learning_rate, batch_size, num_iter, img_size=(224, 224), puck_history_len = 5, input_mode='img', target_config='train_ppo.yaml', dataset_path='/datastor1/calebc/public/data', data_mode='mouse'):
         super().__init__(hidden_sizes, device, target_config)
         self.learning_rate = learning_rate
         self.batch_size = batch_size
@@ -29,7 +29,11 @@ class BehaviorCloning(Agent):
             torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
 
-        self.policy = mlp([self.obs_dim] + [64, 64] + [self.act_dim], activation=nn.ReLU, output_activation=nn.Tanh).to(self.device)
+        self.input_mode = input_mode
+        if self.input_mode == 'img':
+            self.policy = resnet(self.act_dim).to(self.device)
+        else:
+            self.policy = mlp([self.obs_dim] + [64, 64] + [self.act_dim], activation=nn.ReLU, output_activation=nn.Tanh).to(self.device)
         self.optimizer = optim.Adam(self.policy.parameters(), lr=self.learning_rate).to(self.device)
 
     def populate_buffer(self):
@@ -69,7 +73,10 @@ class BehaviorCloning(Agent):
         for _ in range(self.num_iter):
             batch = self.buffer.sample_batch(self.batch_size)
             self.optimizer.zero_grad()
-            action_pred = self.model(batch['obs'])
+            if self.input_mode == 'img':
+                action_pred = self.policy(batch['img'])
+            else:
+                action_pred = self.model(batch['obs'])
             loss = ((action_pred - batch['act']) ** 2).mean()
             mean_loss += loss.item()
             loss.backward()
