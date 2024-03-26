@@ -1,17 +1,20 @@
 import numpy as np
 
 bot_abs = 0.1
-top_abs = 0.05
-max_bias = 0
+top_abs = 0.8
+max_bias_p = -0.15
+max_bias_m = -0.10
 
 # limit rounding
 def clip_limits(x,y,lims):
     x_min_lim, x_max_lim, y_min, y_max = lims
     y = np.clip(y, y_min, y_max, )
-    x_min = x_min_lim + bot_abs * np.abs(y)
-    x_max = x_max_lim - top_abs * np.abs(y)
-    # x_max = min(x_max_lim, max_bias - top_abs * np.abs(y))
-    x_min, x_max = x_min_lim, x_max_lim
+    # x_min = x_min_lim  + bot_abs * np.abs(y)
+    x_min = x_min_lim
+    # x_max = x_max_lim - top_abs * np.abs(y)
+    x_max = min(x_max_lim, max_bias_m - top_abs * y, max_bias_p + top_abs * y)
+    # x_min, x_max = x_min_lim, x_max_lim
+    # print(x_min, x_max,max_bias_m - top_abs * y, max_bias_p + top_abs * y, y)
     x = np.clip(x, x_min, x_max, ) # Workspace limits
     return x,y
 

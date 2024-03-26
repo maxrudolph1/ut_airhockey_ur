@@ -87,10 +87,10 @@ class BehaviorCloning(Agent):
         
         return {'loss': mean_loss / self.num_iter}
 
-    def take_action(self, pose, speed, force, acc, estop, image, puck_history, lims, move_lims):
+    def take_action(self, pose, speed, force, acc, estop, image,images, puck_history, lims, move_lims):
         if self.input_mode == 'img': # TODO: images would have to be stakced for frame stacking
             puck = (puck_history[-1][0],puck_history[-1][1],0)
-            image = pytorch_model.wrap(self.transform_img(image), device=self.device).unsqueeze(0)
+            image = pytorch_model.wrap(self.transform_img(images[-1]), device=self.device).unsqueeze(0)
             netout = self.policy(image)
             delta_x, delta_y = pytorch_model.unwrap(netout[0])
             move_vector = np.array((delta_x,-delta_y)) * np.array(move_lims) / 5

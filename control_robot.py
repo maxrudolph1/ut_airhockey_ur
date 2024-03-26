@@ -226,7 +226,7 @@ def main(control_mode, control_type, load_path = "", additional_args={}):
                     if control_mode in ["mouse", "mimic"]:
                         x, y = (pixel_coord - offset_constants) * 0.001
                     elif control_mode in ["RL", "BC", 'rnet']:
-                        x,y, puck = autonomous_model.take_action(true_pose, true_speed, true_force, measured_acc, rcv.isProtectiveStopped(), image, puck_history, lims, move_lims) # TODO: add image handling
+                        x,y, puck = autonomous_model.take_action(true_pose, true_speed, true_force, measured_acc, rcv.isProtectiveStopped(), image, images, puck_history, lims, move_lims) # TODO: add image handling
                         puck_history.append(puck)
                     ###### servoL #####
                     if control_type == "pol":
@@ -241,11 +241,12 @@ def main(control_mode, control_type, load_path = "", additional_args={}):
 
                     values = get_data(time.time(), tidx, count, true_pose, true_speed, true_force, measured_acc, srvpose, rcv.isProtectiveStopped())
                     measured_values.append(values), #frames.append(np.array(protected_img[:]).reshape(640,480,3))
+
                     
                     # TODO: change of direction is currently very sudden, we need to tune that
                     # print("servl", srvpose[0][1], true_speed, true_force, measured_acc, ctrl.servoL(srvpose[0], vel, acc, block_time, lookahead, gain))
                     
-                    # ctrl.servoL(srvpose[0], vel, acc, block_time, lookahead, gain)
+                    ctrl.servoL(srvpose[0], vel, acc, block_time, lookahead, gain)
 
                     # print("servl", np.abs(polx - true_pose[0]), np.abs(poly - true_pose[1]), pixel_coord, srvpose[0], rcv.isProtectiveStopped())# , true_speed, true_force, measured_acc, )
                     # print("servl", srvpose[0][:2], x,y, true_pose[:2], rcv.isProtectiveStopped())# , true_speed, true_force, measured_acc, )
@@ -274,7 +275,7 @@ def main(control_mode, control_type, load_path = "", additional_args={}):
 
 
 if __name__ == "__main__":
-    control_mode = 'BC' # mouse, mimic, keyboard, RL, BC, rnet
+    control_mode = 'mouse' # mouse, mimic, keyboard, RL, BC, rnet
     control_type = 'rect' # rect, pol or prim
     additional_args = {"image_input": True}
 
