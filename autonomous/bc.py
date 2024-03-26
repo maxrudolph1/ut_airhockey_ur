@@ -6,9 +6,9 @@ import os
 import numpy as np
 import h5py
 
-from agent import Agent
-from models import mlp, resnet
-from buffer import BCBuffer
+from autonomous.agent import Agent
+from autonomous.models import mlp, resnet
+from autonomous.buffer import BCBuffer
 
 class BehaviorCloning(Agent):
     def __init__(self, hidden_sizes, device, learning_rate, batch_size, num_iter, img_size=(224, 224), puck_history_len = 5, input_mode='img', target_config='train_ppo.yaml', dataset_path='/datastor1/calebc/public/data', data_mode='mouse'):
@@ -54,8 +54,8 @@ class BehaviorCloning(Agent):
                 puck_history = [(-1.5,0,0) for i in range(self.puck_history_len)]
 
                 for img, measured_val in zip(img, measured_vals):
-                    obs_from_measured_val = measured_val[4:-6]
-                    act = measured_val[-6:-4] - measured_val[1:3] # delta x, delta y
+                    obs_from_measured_val = measured_val[3:-6]
+                    act = measured_val[-6:-4] - measured_val[4:6] # delta x, delta y
                     puck = self.puck_detector(img, puck_history)
                     puck_history = puck_history[1:] + [puck]
                     obs_from_measured_val = np.concatenate([obs_from_measured_val, puck_history])

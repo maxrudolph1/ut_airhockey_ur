@@ -31,7 +31,7 @@ from check_extrinsics import convert_camera_extrinsic
 
 import shutil
 
-def main(control_mode, control_type, load_path = ""):
+def main(control_mode, control_type, load_path = "", additional_args={}):
     '''
         @param control_mode: Where robot actions are generated: teleoperation_modes = mouse, mimic, keyboard, autonomous = BC, RL
         @param control_type: How the robot is controlled (action space), options: rect, pol, prim
@@ -43,7 +43,7 @@ def main(control_mode, control_type, load_path = ""):
     autonomous_modes = ['BC', 'RL', 'rnet']
 
     if control_mode in autonomous_modes:
-        autonomous_model = initialize_agent(control_mode, load_path)
+        autonomous_model = initialize_agent(control_mode, load_path, additional_args=additional_args)
     # control_mode = 'mouse' # 'mimic'
     # control_mode = 'mimic'
 
@@ -273,7 +273,8 @@ def main(control_mode, control_type, load_path = ""):
 
 
 if __name__ == "__main__":
-    control_mode = 'rnet' # mouse, mimic, keyboard, RL, BC, rnet
+    control_mode = 'BC' # mouse, mimic, keyboard, RL, BC, rnet
     control_type = 'rect' # rect, pol or prim
+    additional_args = {"image_input": True}
 
-    main(control_mode, control_type, "")
+    main(control_mode, control_type, "", additional_args=additional_args)

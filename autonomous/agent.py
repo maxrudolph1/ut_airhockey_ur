@@ -1,5 +1,5 @@
 from networks.network_utils import ObjDict, pytorch_model
-from models import mlp
+from autonomous.models import mlp
 from networks.general.mlp import MLPNetwork
 from robot_operation.coordinate_transform import clip_limits
 import numpy as np
