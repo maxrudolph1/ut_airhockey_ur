@@ -70,8 +70,11 @@ def clean_data(pth, target):
         except Exception as e:
             print('Failed to recover %s. Reason: %s' % (file_path, e))
     cleaned_trajectories = [int(fn[len("trajectory_data"):-5]) for fn in target_filenames]
-
+    
+    filenames.sort(key = lambda x: int(x[len("trajectory_data"):-5]))
     for fn in filenames:
+        if fn.find("trajectory_data") == -1:
+            continue
         tidx = int(fn[len("trajectory_data"):-5])
         if tidx in cleaned_trajectories:
             print("skipping", tidx)
@@ -144,9 +147,9 @@ if __name__ == '__main__':
 # CHANGE THE FOLLOWING TO YOUR PATH AND TARGET
     pth = "data/mouse/trajectories/"
     target = "data/mouse/cleaned/"
-    clean_data(pth, target)
+    # clean_data(pth, target)
 # UNCOMMENT and COMMENT OUT ABOVE if you just want to visualize some cleaned data
     # I left some examples in data/mouse/cleaned
     # press y to stop visualizing cleaned data
-    # tidx = 34
-    # visualize_clean_data(target, tidx)
+    tidx = 193
+    visualize_clean_data(target, tidx)

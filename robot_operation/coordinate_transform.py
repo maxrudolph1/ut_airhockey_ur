@@ -2,6 +2,7 @@ import numpy as np
 
 bot_abs = 0.1
 top_abs = 0.05
+max_bias = 0
 
 # limit rounding
 def clip_limits(x,y,lims):
@@ -9,10 +10,10 @@ def clip_limits(x,y,lims):
     y = np.clip(y, y_min, y_max, )
     x_min = x_min_lim + bot_abs * np.abs(y)
     x_max = x_max_lim - top_abs * np.abs(y)
+    # x_max = min(x_max_lim, max_bias - top_abs * np.abs(y))
     x_min, x_max = x_min_lim, x_max_lim
     x = np.clip(x, x_min, x_max, ) # Workspace limits
     return x,y
-
 
 def get_edge(x,y, w, h):
     # returns relative coordinate bounded by w,h

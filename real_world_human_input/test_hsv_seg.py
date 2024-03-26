@@ -160,9 +160,32 @@ class Segmenter():
         self.upper_val = val
         self.update()
 
-    def read_image(self, path):
-        im = cv2.imread(path)
-        self.bgr = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+    def read_image(self, path, cap=None):
+        if cap is None:
+            # im = cv2.imread(path)
+
+            
+            #### lower HSV: [0, 91, 0], upper HSV: [  7, 255, 255]
+            # path = 'data/mouse/trajectories/trajectory_data250.hdf5' 
+            # dataset_dict = load_hdf5_to_dict(path)
+            # im = dataset_dict['train_img'][100]
+            ####
+            #### lower HSV: [ 0 42  0], upper HSV: [  4 255 255]
+            # path = 'data/mouse/trajectories/trajectory_data327.hdf5' 
+            # dataset_dict = load_hdf5_to_dict(path)
+            # im = dataset_dict['train_img'][69]
+            #### lower HSV: [ 0 53 50], upper HSV: [ 18 255 255]
+            path = 'data/mouse/trajectories/trajectory_data327.hdf5' 
+            dataset_dict = load_hdf5_to_dict(path)
+            im = dataset_dict['train_img'][169]
+
+
+
+
+        else:
+            ret, im = cap.read()
+        # self.bgr = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+        self.bgr = im
         self.hsv = cv2.cvtColor(im, cv2.COLOR_BGR2HSV)
 
     def spin(self):
@@ -175,6 +198,35 @@ class Segmenter():
                 cv2.imshow(self.title_window, self.dst)
                 if cv2.waitKey(30) & 0xFF == ord('q'):
                     break
+import h5py
+
+def load_hdf5_to_dict(datapath):
+    """
+    Load a hdf5 dataset into a dictionary.
+
+    :param datapath: Path to the hdf5 file.
+    :return: Dictionary with the dataset contents.
+    """
+    data_dict = {}
+    
+    # Open the hdf5 file
+    with h5py.File(datapath, 'r') as hdf:
+        # Loop through groups and datasets
+        def recursively_save_dict_contents_to_group(h5file, current_dict):
+            """
+            Recursively traverse the hdf5 file to save all contents to a Python dictionary.
+            """
+            for key, item in h5file.items():
+                if isinstance(item, h5py.Dataset):  # if it's a dataset
+                    current_dict[key] = item[()]  # load the dataset into the dictionary
+                elif isinstance(item, h5py.Group):  # if it's a group (which can contain other groups or datasets)
+                    current_dict[key] = {}
+                    recursively_save_dict_contents_to_group(item, current_dict[key])
+
+        # Start the recursive function
+        recursively_save_dict_contents_to_group(hdf, data_dict)
+
+    return data_dict
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -182,5 +234,7 @@ if __name__ == '__main__':
     args, _ = parser.parse_known_args()
 
     s = Segmenter(args)
-    s.read_image(args.image_path)
+    # cap = cv2.VideoCapture(1)
+    cap = None
+    s.read_image(args.image_path, cap)
     s.spin()
