@@ -7,7 +7,7 @@ import torch.nn as nn
 from autonomous.autonomous import AutonomousModel
 
 class Agent(AutonomousModel):
-    def __init__(self, hidden_sizes, device, target_config = 'train_ppo.yaml', puck_detector=None):
+    def __init__(self, img_size, puck_history_len, device, target_config = 'train_ppo.yaml', puck_detector=None):
         super().__init__(target_config)
         
         # a randomly initialized neural network that takes in all the paddle components and estop and computes an action
@@ -28,6 +28,8 @@ class Agent(AutonomousModel):
         # self.network = MLPNetwork(args)
         self.obs_dim = 1 + 6 + 6 + 6 + 3 + 3 * 3 # estop + pose + speed + force + acc + last 3 puck pos (with missing indicator)
         self.act_dim = 2
+        self.img_size = img_size
+        self.puck_history_len = puck_history_len
 
         # if args.gpu >= 0: self.network.cuda(device=args.gpu)
         self.device = device
@@ -50,12 +52,12 @@ class Agent(AutonomousModel):
         prop_input = np.expand_dims(np.concatenate([np.array([estop]).astype(float), np.array(pose), np.array(speed), np.array(force) / 50, np.array(acc),
                                      np.array(puck), np.array(puck_history[-1]), np.array(puck_history[-2])]), axis=0)
         netout = self.policy(prop_input)
-        x,y = pytorch_model.unwrap(netout[0])
-        move_vector = np.array((x,-y)) * np.array(move_lims) / 5
-        delta_vector = move_vector + pose[:2]
+        delta_x, delta_y = pytorch_model.unwrap(netout[0])
+        move_vector = np.array((delta_x,-delta_y)) * np.array(move_lims) / 5
+        x, y = move_vector + pose[:2]
         # x, y = clip_limits(delta_vector[0], delta_vector[1],lims)
-        print(netout, move_vector, delta_vector,pose[:2],  x,y)
-        return x,y, puck
+        print(netout, move_vector, delta_x, delta_y, pose[:2],  x,y)
+        return x, y, puck
 
     def single_agent_step(self, next_state) -> tuple[np.ndarray, float, bool, bool, dict]:
         if self.env.current_timestep > 0:
@@ -75,12 +77,7 @@ class Agent(AutonomousModel):
         
         obs = self.env.get_observation(next_state)
         return obs, reward, is_finished, truncated, {}
-    
-    def load_dataset(self, path):
-        '''
-        Load the dataset from the path containing hdf5 files
-        '''
-        pass
+
 
     # def train(self, images, poses, speeds, puck_history):
     #     for i, (im, pos, spd) in enumerate(zip(images, poses, speeds)):

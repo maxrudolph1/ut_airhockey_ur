@@ -12,7 +12,7 @@ from buffer import BCBuffer
 
 class BehaviorCloning(Agent):
     def __init__(self, hidden_sizes, device, learning_rate, batch_size, num_iter, img_size=(224, 224), puck_history_len = 5, input_mode='img', target_config='train_ppo.yaml', dataset_path='/datastor1/calebc/public/data', data_mode='mouse'):
-        super().__init__(hidden_sizes, device, target_config)
+        super().__init__(img_size, puck_history_len, device, target_config)
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.num_iter = num_iter
@@ -20,8 +20,6 @@ class BehaviorCloning(Agent):
         self.buffer = BCBuffer(self.obs_dim, self.act_dim, [*img_size, 3], device, 5000)
         self.dataset_path = dataset_path
         self.data_mode = data_mode
-        self.puck_history_len = puck_history_len
-        self.img_size = img_size
 
         self.transform_img = torchvision.transforms.Compose([
             torchvision.transforms.ToTensor(),
