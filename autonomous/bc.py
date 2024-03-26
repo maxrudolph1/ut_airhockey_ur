@@ -5,10 +5,11 @@ import torchvision
 import os
 import numpy as np
 import h5py
+from networks.network_utils import pytorch_model
 
-from agent import Agent
-from models import mlp, resnet
-from buffer import BCBuffer
+from autonomous.agent import Agent
+from autonomous.models import mlp, resnet
+from autonomous.buffer import BCBuffer
 
 class BehaviorCloning(Agent):
     def __init__(self, hidden_sizes, device, learning_rate, batch_size, num_iter, frame_stack=4, img_size=(224, 224), puck_history_len = 3, input_mode='img', target_config='train_ppo.yaml', dataset_path='/datastor1/calebc/public/data', data_mode=['mimic', 'mouse'], save_freq=500, save_dir='models_fs', log_freq=100, puck_detector=None):
@@ -122,6 +123,22 @@ class BehaviorCloning(Agent):
         self.policy.load_state_dict(torch.load(model_path))
         self.policy.eval()
         print('Model loaded from:', model_path)
+
+    def take_action(self, pose, speed, force, acc, estop, image,images, puck_history, lims, move_lims):
+        if self.input_mode == 'img': # TODO: images would have to be stakced for frame stacking
+            puck = (puck_history[-1][0],puck_history[-1][1],0)
+            image = pytorch_model.wrap(self.transform_img(images[-1]), device=self.device).unsqueeze(0)
+            netout = self.policy(image)
+            delta_x, delta_y = pytorch_model.unwrap(netout[0])
+            move_vector = np.array((delta_x,-delta_y)) * np.array(move_lims) / 5
+            x, y = move_vector + pose[:2]
+            # x, y = clip_limits(delta_vector[0], delta_vector[1],lims)
+            print(netout, move_vector, delta_x, delta_y, pose[:2],  x,y)
+            return x, y, puck
+        else:
+            super().take_action(pose, speed, force, acc, estop, image, puck_history, lims, move_lims)
+        return x, y, puck
+
 
 # class BehaviorCloning():
 #     def __init__(self, obs_dim, act_dim, hidden_sizes, activation, learning_rate, batch_size, num_iter, device):

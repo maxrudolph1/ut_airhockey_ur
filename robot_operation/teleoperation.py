@@ -23,8 +23,12 @@ def homography_transform(image, get_save=True, rotate=False):
     image = cv2.resize(image, (int(640*upscale_constant), int(480*upscale_constant)), 
                 interpolation = cv2.INTER_LINEAR)
     dst = cv2.warpPerspective(image,Mimg,original_size * upscale_constant)
-    if rotate: dst = cv2.rotate(dst, cv2.ROTATE_90_CLOCKWISE)
-    showdst = cv2.resize(dst, (int(480*upscale_constant / visual_downscale_constant), int(640*upscale_constant / visual_downscale_constant)), 
+    if rotate: 
+        dst = cv2.rotate(dst, cv2.ROTATE_90_CLOCKWISE)
+        showdst = cv2.resize(dst, (int(480*upscale_constant / visual_downscale_constant), int(640*upscale_constant / visual_downscale_constant)), 
+                interpolation = cv2.INTER_LINEAR)
+    else:
+        showdst = cv2.resize(dst, (int(640*upscale_constant / visual_downscale_constant), int(480*upscale_constant / visual_downscale_constant)), 
                 interpolation = cv2.INTER_LINEAR)
     return showdst, save_image
 
@@ -125,7 +129,7 @@ def save_callback(save_image_check):
 def save_collect(cap):
     start = time.time()
     ret, image = cap.read()
-    showdst, save_image = homography_transform(image, get_save=True)
-    cv2.imshow('showdst',showdst)
-    cv2.waitKey(1)
+    showdst, save_image = homography_transform(image, get_save=True, rotate=True)
+    # cv2.imshow('showdst',showdst)
+    # cv2.waitKey(1)
     return showdst, save_image

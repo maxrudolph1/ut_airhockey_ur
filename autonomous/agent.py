@@ -1,10 +1,10 @@
 from networks.network_utils import ObjDict, pytorch_model
-from models import mlp
+from autonomous.models import mlp
 from networks.general.mlp import MLPNetwork
 from robot_operation.coordinate_transform import clip_limits
 import numpy as np
 import torch.nn as nn
-from autonomous import AutonomousModel
+from autonomous.autonomous import AutonomousModel
 from typing import Tuple
 
 class Agent(AutonomousModel):
@@ -47,7 +47,7 @@ class Agent(AutonomousModel):
         state_info["pucks"].append({"position": puck_history[i], "velocity": puck_history[i] - puck_history[i-1]})
         return state_info
 
-    def take_action(self, pose, speed, force, acc, estop, image, puck_history, lims, move_lims):
+    def take_action(self, pose, speed, force, acc, estop, image, images, puck_history, lims, move_lims):
         if self.puck_detector is not None: puck = self.puck_detector(image, puck_history)
         else: puck = (puck_history[-1][0],puck_history[-1][1],0)
         prop_input = np.expand_dims(np.concatenate([np.array([estop]).astype(float), np.array(pose), np.array(speed), np.array(force) / 50, np.array(acc),
