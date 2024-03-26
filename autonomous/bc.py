@@ -12,15 +12,25 @@ from autonomous.models import mlp, resnet
 from autonomous.buffer import BCBuffer
 
 class BehaviorCloning(Agent):
-    def __init__(self, hidden_sizes, device, learning_rate, batch_size, num_iter, img_size=(224, 224), puck_history_len = 3, input_mode='img', target_config='train_ppo.yaml', dataset_path='/datastor1/calebc/public/data', data_mode='mouse'):
-        super().__init__(img_size, puck_history_len, device, target_config)
+    def __init__(self, hidden_sizes, device, learning_rate, batch_size, num_iter, frame_stack=4, img_size=(224, 224), puck_history_len = 3, input_mode='img', target_config='train_ppo.yaml', dataset_path='/datastor1/calebc/public/data', data_mode=['mimic', 'mouse'], save_freq=500, save_dir='models_fs', log_freq=100, puck_detector=None):
+        super().__init__(img_size, puck_history_len, device, target_config, puck_detector)
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.num_iter = num_iter
         
-        self.buffer = BCBuffer(self.obs_dim, self.act_dim, [*img_size, 3], device, 5000)
+        if frame_stack > 1:
+            self.buffer = BCBuffer(self.obs_dim, self.act_dim, [frame_stack, *img_size, 3], device, 5000)
+        else:
+            self.buffer = BCBuffer(self.obs_dim, self.act_dim, [*img_size, 3], device, 5000)
         self.dataset_path = dataset_path
         self.data_mode = data_mode
+        self.save_freq = save_freq
+        self.save_dir = save_dir
+        self.log_freq = log_freq
+        self.frame_stack = frame_stack
+
+        if not os.path.exists(self.save_dir):
+            os.makedirs(self.save_dir)
 
         self.transform_img = torchvision.transforms.Compose([
             torchvision.transforms.ToTensor(),
@@ -30,7 +40,7 @@ class BehaviorCloning(Agent):
 
         self.input_mode = input_mode
         if self.input_mode == 'img':
-            self.policy = resnet(self.act_dim).to(self.device)
+            self.policy = resnet(self.act_dim, pretrained=True).to(self.device)
         else:
             self.policy = mlp([self.obs_dim] + [64, 64] + [self.act_dim], activation=nn.ReLU, output_activation=nn.Tanh).to(self.device)
         self.optimizer = optim.Adam(self.policy.parameters(), lr=self.learning_rate)
@@ -39,41 +49,53 @@ class BehaviorCloning(Agent):
         '''
         Load datasets from hdf5 file and store in buffer
         '''
+        for mode in self.data_mode:
+            data_dir = os.path.join(self.dataset_path, mode)
+            data_dir = os.path.join(data_dir, 'cleaned')
+            print('Loading data from:', data_dir)
+            obs = []
+            imgs = []
+            acts = []
+            for file in os.listdir(data_dir):
+                
+                with h5py.File(os.path.join(data_dir, file), 'r') as f:
+                    try:
+                        dat_imgs = np.array(f['train_img'])
+                        measured_vals = np.array(f['train_vals'])
 
-        data_dir = os.path.join(self.dataset_path, self.data_mode)
-        data_dir = os.path.join(data_dir, 'cleaned')
-        obs = []
-        imgs = []
-        acts = []
-        for file in os.listdir(data_dir):
+                        puck_history = [(-1.5,0,0) for i in range(self.puck_history_len)]
+
+                        if self.frame_stack > 1:
+                            dat_imgs = np.concatenate([np.zeros([self.frame_stack-1, *dat_imgs.shape[1:]]), dat_imgs], axis=0)
+                        for i in range(self.frame_stack-1, len(dat_imgs)):
+                            img = dat_imgs[i-self.frame_stack+1:i+1]
+                            measured_val = measured_vals[i - self.frame_stack + 1]
+                            obs_from_measured_val = measured_val[3:-6]
+                            act = measured_val[-6:-4] - measured_val[4:6] # delta x, delta y
+                            act/=[0.26, 0.12]
+                            if self.puck_detector is not None:
+                                puck = self.puck_detector(img, puck_history)
+                                puck_history = puck_history[1:] + [puck]
+                            # print(obs_from_measured_val.shape, act.shape, img.shape, np.array(puck_history).shape)
+                            obs_from_measured_val = np.concatenate([obs_from_measured_val, *[puck_history[i] for i in range(self.puck_history_len)]])
+                            obs.append(obs_from_measured_val)
+                            acts.append(act)
+                            transformed_img = self.transform_img(img)
+                            imgs.append(transformed_img)
+                    except Exception as e:
+                        print('Error in file:', file, e)
+                        continue
             
-            with h5py.File(os.path.join(data_dir, file), 'r') as f:
-                print(file)
-                dat_imgs = np.array(f['train_img'])
-                measured_vals = np.array(f['train_vals'])
-
-                puck_history = [(-1.5,0,0) for i in range(self.puck_history_len)]
-
-                for img, measured_val in zip(dat_imgs, measured_vals):
-                    obs_from_measured_val = measured_val[3:-6]
-                    act = measured_val[-6:-4] - measured_val[4:6] # delta x, delta y
-                    if self.puck_detector is not None:
-                        puck = self.puck_detector(img, puck_history)
-                        puck_history = puck_history[1:] + [puck]
-                    # print(obs_from_measured_val.shape, act.shape, img.shape, np.array(puck_history).shape)
-                    obs_from_measured_val = np.concatenate([obs_from_measured_val, *[puck_history[i] for i in range(self.puck_history_len)]])
-                    obs.append(obs_from_measured_val)
-                    acts.append(act)
-                    transformed_img = self.transform_img(img)
-                    imgs.append(transformed_img)
-
+        print('Storing data in buffer')
+        print(len(imgs), imgs[0].shape)
+        print(np.max(acts), np.min(acts))
         self.buffer.store_all(obs, acts, imgs)
 
 
     def train_offline(self):
         mean_loss = 0
-
-        for _ in range(self.num_iter):
+        running_mean = 0
+        for i in range(self.num_iter):
             batch = self.buffer.sample_batch(self.batch_size)
             self.optimizer.zero_grad()
             if self.input_mode == 'img':
@@ -82,10 +104,25 @@ class BehaviorCloning(Agent):
                 action_pred = self.policy(batch['obs'])
             loss = ((action_pred - batch['act']) ** 2).mean()
             mean_loss += loss.item()
+            running_mean += loss.item()
             loss.backward()
             self.optimizer.step()
-        
+
+            if (i+1) % self.log_freq == 0:
+                print('Iteration:', i+1, 'Loss:', running_mean / self.log_freq)
+                running_mean = 0
+
+            if i % self.save_freq == 0:
+                torch.save(self.policy.state_dict(), os.path.join(self.save_dir, 'bc_model_' + str(i) + '.pt'))
+                print('Model saved at iteration:', i)
+        torch.save(self.policy.state_dict(), os.path.join(self.save_dir, 'bc_model_final.pt'))
+        # print('Model saved at iteration:', i)
         return {'loss': mean_loss / self.num_iter}
+    
+    def load_model(self, model_path):
+        self.policy.load_state_dict(torch.load(model_path))
+        self.policy.eval()
+        print('Model loaded from:', model_path)
 
     def take_action(self, pose, speed, force, acc, estop, image,images, puck_history, lims, move_lims):
         if self.input_mode == 'img': # TODO: images would have to be stakced for frame stacking
@@ -142,6 +179,7 @@ class BehaviorCloning(Agent):
     
 
 if __name__ == '__main__':
-    bc = BehaviorCloning([64, 64], 'cuda', 1e-3, 32, 1000)
+    bc = BehaviorCloning([64, 64], 'cuda', 3e-4, 128, 10000)
     bc.populate_buffer()
+    # bc.load_model('models/bc_model_900.pt')
     bc.train_offline()
