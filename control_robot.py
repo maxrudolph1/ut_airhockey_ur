@@ -55,7 +55,7 @@ def main(control_mode, control_type, load_path = "", additional_args={}):
     shared_image_check[0] = 0
     protected_mouse_pos = ProtectedArray(shared_mouse_pos)
     protected_img_check = ProtectedArray(shared_image_check)
-    cap = None
+    cap, camera_process, mimic_process = None, None, None
     if control_mode == 'mouse':
         camera_process = multiprocessing.Process(target=camera_callback, args=(protected_mouse_pos,protected_img_check))
         camera_process.start()
@@ -265,7 +265,8 @@ def main(control_mode, control_type, load_path = "", additional_args={}):
                 clear_images()
 
     finally:
-        camera_process.kill()
+        if camera_process: camera_process.kill()
+        if mimic_process: mimic_process.kill()
         ctrl.forceModeStop()
         ctrl.stopScript()
 

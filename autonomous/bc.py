@@ -5,6 +5,7 @@ import torchvision
 import os
 import numpy as np
 import h5py
+from networks.network_utils import pytorch_model
 
 from autonomous.agent import Agent
 from autonomous.models import mlp, resnet
@@ -85,6 +86,22 @@ class BehaviorCloning(Agent):
             self.optimizer.step()
         
         return {'loss': mean_loss / self.num_iter}
+
+    def take_action(self, pose, speed, force, acc, estop, image, puck_history, lims, move_lims):
+        if self.input_mode == 'img': # TODO: images would have to be stakced for frame stacking
+            puck = (puck_history[-1][0],puck_history[-1][1],0)
+            image = pytorch_model.wrap(self.transform_img(image), device=self.device).unsqueeze(0)
+            netout = self.policy(image)
+            delta_x, delta_y = pytorch_model.unwrap(netout[0])
+            move_vector = np.array((delta_x,-delta_y)) * np.array(move_lims) / 5
+            x, y = move_vector + pose[:2]
+            # x, y = clip_limits(delta_vector[0], delta_vector[1],lims)
+            print(netout, move_vector, delta_x, delta_y, pose[:2],  x,y)
+            return x, y, puck
+        else:
+            super().take_action(pose, speed, force, acc, estop, image, puck_history, lims, move_lims)
+        return x, y, puck
+
 
 # class BehaviorCloning():
 #     def __init__(self, obs_dim, act_dim, hidden_sizes, activation, learning_rate, batch_size, num_iter, device):

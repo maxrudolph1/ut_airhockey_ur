@@ -4,7 +4,7 @@ from networks.general.mlp import MLPNetwork
 from robot_operation.coordinate_transform import clip_limits
 import numpy as np
 import torch.nn as nn
-from autonomous import AutonomousModel
+from autonomous.autonomous import AutonomousModel
 from typing import Tuple
 
 class Agent(AutonomousModel):
