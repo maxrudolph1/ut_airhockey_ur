@@ -84,22 +84,23 @@ def homography_transform(image, get_save=False):
     return showdst, save_image
 
 
-for traj in range(0,500):
-    try:
-        path = f'/datastor1/calebc/public/data/mouse/trajectories/trajectory_data{traj}.hdf5'
-        dataset_dict = load_hdf5_to_dict(path)
-        xs,ys = [], []
-        for img in dataset_dict['train_img']:
-            # train_img = dataset_dict['train_img'][120]
-            train_img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-            
-            dst, img = homography_transform(train_img)
-            refined_img, idx,mask = find_hsv_puck(img, [0,100,100], [50,255,255])
-            x,y = np.median(idx[0]), np.median(idx[1])
-            xs.append(x)
-            ys.append(y)
-            xy_pixel = np.array([xs,ys])
-        np.save(f'/datastor1/calebc/public/data/mouse/trajectories/state_trajectories/state_trajectory_data{traj}.hdf5', xy_pixel)
-        print(xs)
-    except:
-        pass
+for traj in range(250,500):
+    # try:
+    path = f'/datastor1/calebc/public/data/mouse/trajectories/trajectory_data{traj}.hdf5'
+    dataset_dict = load_hdf5_to_dict(path)
+    xs,ys = [], []
+    print(dataset_dict.keys())
+    for img in dataset_dict['train_img']:
+        # print(img.shape)
+        train_img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        dst, save_img = homography_transform(train_img)
+        # print(img.shape)
+        refined_img, idx,mask = find_hsv_puck(dst, [0,100,100], [255,255,255])
+        x,y = np.median(idx[0]), np.median(idx[1])
+        xs.append(x)
+        ys.append(y)
+        xy_pixel = np.array([xs,ys])
+    np.save(f'/datastor1/calebc/public/data/mouse/trajectories/state_trajectories/state_trajectory_data{traj}', xy_pixel)
+    print(xs)
+    # except:
+    #     print('error on ', traj)
