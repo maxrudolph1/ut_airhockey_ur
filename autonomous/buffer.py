@@ -2,10 +2,10 @@ import torch
 import numpy as np
 
 class BCBuffer:
-    def __init__(self, obs_dim, act_dim, img_dim, device, size=5000):
+    def __init__(self, obs_dim, act_dim, img_size, device, size=5000):
         self.obs_buf = np.zeros((size, obs_dim), dtype=np.float32)
         self.act_buf = np.zeros((size, act_dim), dtype=np.float32)
-        self.img_buf = np.zeros((size, img_dim), dtype=np.float32)
+        self.img_buf = np.zeros((size, *img_size), dtype=np.float32)
 
         self.ptr, self.size, self.max_size = 0, 0, size
         self.device = device

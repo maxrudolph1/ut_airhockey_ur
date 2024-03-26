@@ -11,7 +11,7 @@ from autonomous.models import mlp, resnet
 from autonomous.buffer import BCBuffer
 
 class BehaviorCloning(Agent):
-    def __init__(self, hidden_sizes, device, learning_rate, batch_size, num_iter, img_size=(224, 224), puck_history_len = 5, input_mode='img', target_config='train_ppo.yaml', dataset_path='/datastor1/calebc/public/data', data_mode='mouse'):
+    def __init__(self, hidden_sizes, device, learning_rate, batch_size, num_iter, img_size=(224, 224), puck_history_len = 3, input_mode='img', target_config='train_ppo.yaml', dataset_path='/datastor1/calebc/public/data', data_mode='mouse'):
         super().__init__(img_size, puck_history_len, device, target_config)
         self.learning_rate = learning_rate
         self.batch_size = batch_size
@@ -32,7 +32,7 @@ class BehaviorCloning(Agent):
             self.policy = resnet(self.act_dim).to(self.device)
         else:
             self.policy = mlp([self.obs_dim] + [64, 64] + [self.act_dim], activation=nn.ReLU, output_activation=nn.Tanh).to(self.device)
-        self.optimizer = optim.Adam(self.policy.parameters(), lr=self.learning_rate).to(self.device)
+        self.optimizer = optim.Adam(self.policy.parameters(), lr=self.learning_rate)
 
     def populate_buffer(self):
         '''
@@ -40,26 +40,30 @@ class BehaviorCloning(Agent):
         '''
 
         data_dir = os.path.join(self.dataset_path, self.data_mode)
+        data_dir = os.path.join(data_dir, 'cleaned')
         obs = []
         imgs = []
         acts = []
         for file in os.listdir(data_dir):
             
             with h5py.File(os.path.join(data_dir, file), 'r') as f:
-                imgs = np.array(f['train_img'])
+                print(file)
+                dat_imgs = np.array(f['train_img'])
                 measured_vals = np.array(f['train_vals'])
 
                 puck_history = [(-1.5,0,0) for i in range(self.puck_history_len)]
 
-                for img, measured_val in zip(img, measured_vals):
+                for img, measured_val in zip(dat_imgs, measured_vals):
                     obs_from_measured_val = measured_val[3:-6]
                     act = measured_val[-6:-4] - measured_val[4:6] # delta x, delta y
-                    puck = self.puck_detector(img, puck_history)
-                    puck_history = puck_history[1:] + [puck]
-                    obs_from_measured_val = np.concatenate([obs_from_measured_val, puck_history])
+                    if self.puck_detector is not None:
+                        puck = self.puck_detector(img, puck_history)
+                        puck_history = puck_history[1:] + [puck]
+                    # print(obs_from_measured_val.shape, act.shape, img.shape, np.array(puck_history).shape)
+                    obs_from_measured_val = np.concatenate([obs_from_measured_val, *[puck_history[i] for i in range(self.puck_history_len)]])
                     obs.append(obs_from_measured_val)
                     acts.append(act)
-                    transformed_img = self.transform_image(img)
+                    transformed_img = self.transform_img(img)
                     imgs.append(transformed_img)
 
         self.buffer.store_all(obs, acts, imgs)
@@ -116,3 +120,9 @@ class BehaviorCloning(Agent):
 #             self.optimizer.step()
         
 #         return {'loss': mean_loss / self.num_iter}
+    
+
+if __name__ == '__main__':
+    bc = BehaviorCloning([64, 64], 'cuda', 1e-3, 32, 1000)
+    bc.populate_buffer()
+    bc.train_offline()
