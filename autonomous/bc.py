@@ -76,7 +76,7 @@ class BehaviorCloning(Agent):
             if self.input_mode == 'img':
                 action_pred = self.policy(batch['img'])
             else:
-                action_pred = self.model(batch['obs'])
+                action_pred = self.policy(batch['obs'])
             loss = ((action_pred - batch['act']) ** 2).mean()
             mean_loss += loss.item()
             loss.backward()
