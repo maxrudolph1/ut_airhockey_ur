@@ -15,7 +15,7 @@ save_downscale_constant = 2
 offset_constants = np.array((2100, 500))
 
 
-def homography_transform(image, get_save=True):
+def homography_transform(image, get_save=True, rotate=False):
     image = cv2.rotate(image, cv2.ROTATE_180)
     save_image = None
     if get_save:
@@ -23,7 +23,7 @@ def homography_transform(image, get_save=True):
     image = cv2.resize(image, (int(640*upscale_constant), int(480*upscale_constant)), 
                 interpolation = cv2.INTER_LINEAR)
     dst = cv2.warpPerspective(image,Mimg,original_size * upscale_constant)
-    dst = cv2.rotate(dst, cv2.ROTATE_90_CLOCKWISE)
+    if rotate: dst = cv2.rotate(dst, cv2.ROTATE_90_CLOCKWISE)
     showdst = cv2.resize(dst, (int(480*upscale_constant / visual_downscale_constant), int(640*upscale_constant / visual_downscale_constant)), 
                 interpolation = cv2.INTER_LINEAR)
     return showdst, save_image
@@ -107,7 +107,7 @@ def save_callback(save_image_check):
     while True:
         start = time.time()
         ret, image = cap.read()
-        showdst, save_image = homography_transform(image, get_save=save_image_check[0] == 1)
+        showdst, save_image = homography_transform(image, get_save=save_image_check[0] == 1, rotate=True)
         if save_image_check[0] == 1: imageio.imsave("./temp/images/img" + str(time.time()) + ".jpg", save_image)
         # image = cv2.rotate(image, cv2.ROTATE_180)
         # if save_image_check[0] == 1: imageio.imsave("./temp/images/img" + str(time.time()) + ".jpg", cv2.resize(image, (int(640/save_downscale_constant), int(480/save_downscale_constant))))
