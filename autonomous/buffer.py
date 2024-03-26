@@ -18,16 +18,16 @@ class BCBuffer:
         self.size = min(self.size + 1, self.max_size)
 
     def store_all(self, obs, act, img):
-        self.obs_buf = obs
-        self.act_buf = act
-        self.img_buf = img
+        self.obs_buf = np.array(obs)
+        self.act_buf = np.array(act)
+        self.img_buf = torch.stack(img)
         self.size = len(obs)
 
     def sample_batch(self, batch_size=32):
         idxs = np.random.randint(0, self.size, size=batch_size)
         return dict(
             obs=torch.tensor(self.obs_buf[idxs]).to(self.device),
-            img=torch.tensor(self.img_buf[idxs]).to(self.device),
+            img=self.img_buf[idxs].to(self.device),
             act=torch.tensor(self.act_buf[idxs]).to(self.device)
             )
     
