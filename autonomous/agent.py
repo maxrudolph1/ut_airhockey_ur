@@ -4,7 +4,8 @@ from networks.general.mlp import MLPNetwork
 from robot_operation.coordinate_transform import clip_limits
 import numpy as np
 import torch.nn as nn
-from autonomous.autonomous import AutonomousModel
+from autonomous import AutonomousModel
+from typing import Tuple
 
 class Agent(AutonomousModel):
     def __init__(self, img_size, puck_history_len, device, target_config = 'train_ppo.yaml', puck_detector=None):
@@ -59,7 +60,7 @@ class Agent(AutonomousModel):
         print(netout, move_vector, delta_x, delta_y, pose[:2],  x,y)
         return x, y, puck
 
-    def single_agent_step(self, next_state) -> tuple[np.ndarray, float, bool, bool, dict]:
+    def single_agent_step(self, next_state) -> Tuple[np.ndarray, float, bool, bool, dict]:
         if self.env.current_timestep > 0:
             self.env.old_state = self.env.current_state
         self.env.current_state = next_state

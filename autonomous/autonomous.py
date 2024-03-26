@@ -1,5 +1,5 @@
 import os, yaml
-from autonomous.airhockey import AirHockeyEnv
+from airhockey import AirHockeyEnv
 
 class AutonomousModel():
     def __init__(self, target_config = 'train_ppo.yaml'):
