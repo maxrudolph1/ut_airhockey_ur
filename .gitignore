@@ -4,3 +4,5 @@ data/*
 temp/*
 vals/*
 *.ipynb_checkpoints/*
+**/*.mp4
+analysis/traj_videos
