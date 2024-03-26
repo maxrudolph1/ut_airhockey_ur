@@ -2,25 +2,34 @@ import torch
 import numpy as np
 
 class BCBuffer:
-    def __init__(self, obs_dim, act_dim, size=5000):
+    def __init__(self, obs_dim, act_dim, img_dim, device, size=5000):
         self.obs_buf = np.zeros((size, obs_dim), dtype=np.float32)
         self.act_buf = np.zeros((size, act_dim), dtype=np.float32)
-        self.ptr, self.size, self.max_size = 0, 0, size
+        self.img_buf = np.zeros((size, img_dim), dtype=np.float32)
 
-    def store(self, obs, act):
+        self.ptr, self.size, self.max_size = 0, 0, size
+        self.device = device
+
+    def store(self, obs, act, img):
         self.obs_buf[self.ptr] = obs
         self.act_buf[self.ptr] = act
+        self.img_buf[self.ptr] = img
         self.ptr = (self.ptr + 1) % self.max_size
         self.size = min(self.size + 1, self.max_size)
 
-    def store_all(self, obs, act):
+    def store_all(self, obs, act, img):
         self.obs_buf = obs
         self.act_buf = act
+        self.img_buf = img
         self.size = len(obs)
 
     def sample_batch(self, batch_size=32):
         idxs = np.random.randint(0, self.size, size=batch_size)
-        return dict(obs=torch.tensor(self.obs_buf[idxs]), act=torch.tensor(self.act_buf[idxs]))
+        return dict(
+            obs=torch.tensor(self.obs_buf[idxs]).to(self.device),
+            img=torch.tensor(self.img_buf[idxs]).to(self.device),
+            act=torch.tensor(self.act_buf[idxs]).to(self.device)
+            )
     
 class PPOBuffer:
     def __init__(self, obs_dim, act_dim, size, gamma=0.99, lam=0.95):
