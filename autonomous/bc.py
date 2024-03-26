@@ -55,7 +55,7 @@ class BehaviorCloning(Agent):
 
                 for img, measured_val in zip(img, measured_vals):
                     obs_from_measured_val = measured_val[4:-6]
-                    act = measured_val[-6:-4]
+                    act = measured_val[-6:-4] - measured_val[1:3] # delta x, delta y
                     puck = self.puck_detector(img, puck_history)
                     puck_history = puck_history[1:] + [puck]
                     obs_from_measured_val = np.concatenate([obs_from_measured_val, puck_history])
