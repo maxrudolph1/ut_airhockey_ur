@@ -53,14 +53,15 @@ def produce_reaching(data_mode, dataset_path):
                                 else:
                                     print("skipped", start, end, true_posses)
                                 if end - start > MIN_LEN * 2: # if we have a lot of points, keep a sub trajectory fo at least MIN_LEN
-                                    length = np.random.randint(MIN_LEN, end-start)
-                                    sidx = np.random.randint(start, end - length)
-                                    subt_idxes.append((sidx, sidx + length))
-                                    goals = np.stack([val.copy() for _ in range(length)], axis= 0)
-                                    dones = np.zeros(length)
-                                    dones[-1] = 1
-                                    true_vals.append((np.stack(tvs[sidx-start:sidx + length - start], axis=0), goals, dones))
-                                    print("added sub", sidx, sidx + length, true_posses[sidx - start:sidx+length - start])
+                                    for i in range(int((end - start) // (MIN_LEN))):
+                                        length = np.random.randint(MIN_LEN, end-start)
+                                        sidx = np.random.randint(start, end - length)
+                                        subt_idxes.append((sidx, sidx + length))
+                                        goals = np.stack([val.copy() for _ in range(length)], axis= 0)
+                                        dones = np.zeros(length)
+                                        dones[-1] = 1
+                                        true_vals.append((np.stack(tvs[sidx-start:sidx + length - start], axis=0), goals, dones))
+                                        print("added sub", sidx, sidx + length, true_posses[sidx - start:sidx+length - start])
                                 start = end = i + 1 # start a new trajectory where this one ended
                                 true_posses = list()
                                 tvs = list() 
