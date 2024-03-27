@@ -30,7 +30,55 @@ class BCBuffer:
             img=self.img_buf[idxs].to(self.device),
             act=torch.tensor(self.act_buf[idxs]).to(self.device)
             )
-    
+
+
+
+class OfflineBuffer:
+    def __init__(self, obs_dim, act_dim, img_size, device, size=5000):
+        self.obs_buf = np.zeros((size, obs_dim), dtype=np.float32)
+        self.act_buf = np.zeros((size, act_dim), dtype=np.float32)
+        self.img_obs_buf = np.zeros((size, *img_size), dtype=np.float32)
+        self.next_obs_buf = np.zeros((size, obs_dim), dtype=np.float32)
+        self.next_img_obs_buf = np.zeros((size, *img_size), dtype=np.float32)
+        self.rew_buf = np.zeros(size, dtype=np.float32)
+        self.done_buf = np.zeros(size, dtype=np.float32)
+        self.ptr, self.size, self.max_size = 0, 0, size
+        self.device = device
+
+    def store(self, obs, img_obs, act, reward, next_obs, next_img_obs, done):
+        self.obs_buf[self.ptr] = obs
+        self.act_buf[self.ptr] = act
+        self.img_obs_buf[self.ptr] = img_obs
+        self.next_obs_buf[self.ptr] = next_obs
+        self.next_img_obs_buf[self.ptr] = next_img_obs
+        self.rew_buf[self.ptr] = reward
+        self.done_buf[self.ptr] = done
+
+        self.ptr = (self.ptr + 1) % self.max_size
+        self.size = min(self.size + 1, self.max_size)
+
+    def store_all(self, obs, img_obs, act, reward, next_obs, next_img_obs, done):
+        self.obs_buf = np.array(obs)
+        self.act_buf = np.array(act)
+        self.img_obs_buf = torch.stack(img_obs)
+        self.next_obs_buf = np.array(next_obs)
+        self.next_img_obs_buf = torch.stack(next_img_obs)
+        self.rew_buf = np.array(reward)
+        self.done_buf = np.array(done)
+        self.size = len(obs)
+
+    def sample(self, batch_size=32):
+        idxs = np.random.randint(0, self.size, size=batch_size)
+        return dict(
+            obs=torch.tensor(self.obs_buf[idxs]).to(self.device),
+            img_obs=self.img_buf[idxs].to(self.device),
+            act=torch.tensor(self.act_buf[idxs]).to(self.device),
+            reward=torch.tensor(self.rew_buf[idxs]).to(self.device),
+            next_obs=torch.tensor(self.next_obs_buf[idxs]).to(self.device),
+            next_img_obs=self.next_img_obs_buf[idxs].to(self.device),
+            done=torch.tensor(self.done_buf[idxs]).to(self.device)
+            )
+
 class PPOBuffer:
     def __init__(self, obs_dim, act_dim, size, gamma=0.99, lam=0.95):
         self.obs_buf = np.zeros((size, obs_dim), dtype=np.float32)
