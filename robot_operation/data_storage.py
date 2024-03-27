@@ -67,11 +67,11 @@ def store_data(pth, tidx, count, image_path, images, vals):
     imgs = np.stack(imgs, axis=0)
     
     vals = np.stack(vals, axis=0)
+    print(imgs.shape, vals.shape)
     if imgs.shape[0] != vals.shape[0]:
         print("MISALIGNED")
         return False
 
-    print(imgs.shape, vals.shape)
     write_trajectory(pth, tidx, imgs, vals)
     return True
 

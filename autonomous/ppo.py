@@ -2,9 +2,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+import copy
 
-from models import ActorCritic
-from buffer import PPOBuffer
+from autonomous.models import ActorCritic
+from autonomous.buffer import PPOBuffer
+from autonomous.agent import Agent
 
 class PPO(Agent):
     def __init__(self, hidden_sizes, device, learning_rate, clip_ratio, gamma, lam, batch_size, num_trajs, num_ppo_updates, buffer_size, img_size=(224, 224), puck_history_len=5, target_config='train_ppo.yaml'):
@@ -13,6 +15,7 @@ class PPO(Agent):
         self.gamma = gamma
         self.lam = lam
         self.batch_size = batch_size
+        self.num_trajs = num_trajs
         self.num_ppo_updates = num_ppo_updates
         self.policy = ActorCritic(self.obs_dim, self.act_dim, hidden_sizes, nn.ReLU, device).to(device)
         self.optimizer = optim.Adam(self.policy.parameters(), lr=learning_rate)
@@ -21,22 +24,25 @@ class PPO(Agent):
 
     def train(self, measured_vals, images, puck_history):
         curr_puck_history = [(-1.5,0,0) for i in range(self.puck_history_len)]
-        for i, img, measured_val in enumerate(zip(images, measured_vals)):
+        for i, (img, measured_val) in enumerate(zip(images, measured_vals)):
             pose, speed = measured_val[4:10], measured_val[10:16]
             next_state = self._compute_state(pose, speed, i, puck_history)
             _, reward, _, _, _ = self.single_agent_step(next_state)
             curr_puck_history = curr_puck_history[1:] + [puck_history[i]]
-            obs = np.concatenate([measured_val[3:-6], curr_puck_history])
+            print(np.concatenate(curr_puck_history), measured_val[3:-6])
+            obs = np.concatenate([measured_val[3:-6], np.concatenate(curr_puck_history)])
+            print(obs.shape)
 
             with torch.no_grad():
-                val = self.policy(torch.tensor(obs, dtype=torch.float32).to(self.device))[1]
-                logp = self.policy.log_prob(torch.tensor(obs, dtype=torch.float32).to(self.device), torch.tensor(measured_val[-6:-4], dtype=torch.float32).to(self.device))
+                obs = torch.tensor(obs, dtype=torch.float32).to(self.device).unsqueeze(0)
+                val = self.policy.compute(obs)[1]
+                logp = self.policy.log_prob(obs, torch.tensor(measured_val[-6:-4], dtype=torch.float32).to(self.device).unsqueeze(0))
 
-            self.buffer.store(obs, measured_val[-6:-4], reward, val, logp)
+            self.buffer.store(obs[0].cpu().numpy(), copy.deepcopy(measured_val[-6:-4]), copy.deepcopy(reward), val[0].cpu().numpy(), copy.deepcopy(logp.cpu().numpy()))
 
         # To Check: Might be wrong
-        last_val = self.policy(torch.tensor(obs, dtype=torch.float32).to(self.device))[1]
-        self.buffer.finish_path(last_val)
+        last_val = self.policy.compute(obs)[1].detach().cpu().numpy()
+        self.buffer.finish_path(last_val[0])
         self.traj_counter += 1
 
         if self.traj_counter == self.num_trajs:
@@ -46,7 +52,7 @@ class PPO(Agent):
             for _ in range(self.num_ppo_updates):
                 batch = self.buffer.sample_batch(self.batch_size)
                 self.optimizer.zero_grad()
-                pi, v = self.policy(batch['obs'])
+                pi, v = self.policy.compute(batch['obs'])
                 logp = self.policy.log_prob(batch['obs'], batch['act'])
                 ratio = torch.exp(logp - batch['logp'])
                 clip_adv = torch.clamp(ratio, 1 - self.clip_ratio, 1 + self.clip_ratio) * batch['adv']
