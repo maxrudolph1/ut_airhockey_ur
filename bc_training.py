@@ -1,6 +1,6 @@
 from autonomous.bc import BehaviorCloning
 
-bc = BehaviorCloning([64, 64], 'cuda', 3e-4, 128, 50000)
+bc = BehaviorCloning([64, 64], 'cuda', 3e-4, 128, 50000, save_dir='/datastor1/mrudolph')
 # bc.populate_buffer()
 # bc.load_state_data()
 # bc.load_data()

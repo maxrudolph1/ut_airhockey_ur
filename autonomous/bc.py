@@ -15,7 +15,11 @@ import cv2
 from PIL import Image
 
 class BehaviorCloning(Agent):
-    def __init__(self, hidden_sizes, device, learning_rate, batch_size, num_iter, frame_stack=4, img_size=(224, 224), puck_history_len = 5, input_mode='state', target_config='train_ppo.yaml', dataset_path='/datastor1/calebc/public/data', data_mode=['mimic', 'mouse'], save_freq=500, save_dir='/datastor1/siddhant/test_state2', log_freq=100, puck_detector=None):
+    def __init__(self, hidden_sizes, device, learning_rate, batch_size, num_iter, 
+                 frame_stack=4, img_size=(224, 224), puck_history_len = 5, input_mode='state', 
+                 target_config='train_ppo.yaml', dataset_path='/datastor1/calebc/public/data', 
+                 data_mode=['mimic', 'mouse'], save_freq=500, save_dir='/datastor1/siddhant/test_state2', 
+                 log_freq=100, puck_detector=None):
         super().__init__(img_size, puck_history_len, device, target_config, puck_detector)
         self.learning_rate = learning_rate
         self.batch_size = batch_size
