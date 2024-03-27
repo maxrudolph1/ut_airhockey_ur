@@ -26,16 +26,15 @@ def create_video_from_frames(frame_array, output_path, fps=30):
     
     for i in range(N):
         img = frame_array[i]
-        # GOOD red: hsv_low = [0,100,0], hsv_high=[50,255,255]
-        # GOOD green:  [40, 25,50], [80,100,100]
-
         frame = img
         out.write(frame)  # Write the frame
 
     
     out.release()  # Release the VideoWriter
-    
-def find_hsv_puck(image, hsv_low=[0,0,0], hsv_high=[255, 255, 255], hsv_alt=None):
+
+def find_hsv_puck(image, color=None, hsv_low=[0,0,0], hsv_high=[255, 255, 255], apply_mask=False):
+    if color is not None:
+        hsv_low, hsv_high = color[0], color[1]
     # hsv_alt should e a lit
     h, w, _ = image.shape
     
@@ -52,7 +51,12 @@ def find_hsv_puck(image, hsv_low=[0,0,0], hsv_high=[255, 255, 255], hsv_alt=None
     # remove_table_edges_mask[0:175, 30:290] = 1
     # remove_table_edges_mask[, :] = 1
     # refined_mask *= remove_table_edges_mask
-    refined_mask[:,:200] = 0
+    if apply_mask:
+        refined_mask[:,:290] = 0
+        refined_mask[:,670:] = 0
+        refined_mask[800:, :] = 0
+        refined_mask[:50, :] = 0
+        # refined_mask[
     puck_idx = np.where(refined_mask)
     refined_result = cv2.bitwise_and(image, image, mask=refined_mask)
     
@@ -90,25 +94,18 @@ def load_hdf5_to_dict(datapath):
                 elif isinstance(item, h5py.Group):  # if it's a group (which can contain other groups or datasets)
                     current_dict[key] = {}
                     recursively_save_dict_contents_to_group(item, current_dict[key])
-
         # Start the recursive function
         recursively_save_dict_contents_to_group(hdf, data_dict)
 
     return data_dict
 
 def pixel2loc(xs,ys):
-    xs = np.array(xs)
-    ys = np.array(ys)
-    xy_pixel = np.stack([xs,ys])
-    ys -= 273 
-    ys_range = np.nanmax(ys)
-    ys /= ys_range
-    ys -= 0.5
-    ys *= 0.8      
-    xs -= 922
-    xs /= ys_range
-    xs *= (1 * 0.8)
-    return np.stack([xs,ys])
+    xs = np.array(xs) - 500 
+    ys = np.array(ys) - 2100
+    xy_pixel = np.stack([-xs,ys])
+    xy_robot_frame = xy_pixel * 0.001
+    return xy_robot_frame
+
     
 def homography_transform(image, get_save=False):
     # image = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
@@ -116,6 +113,7 @@ def homography_transform(image, get_save=False):
     Mimg = np.load('../Mimg.npy')
     
     upscale_constant = 3
+    image = cv2.resize(image, (640, 480))
     original_size = np.array([640, 480])
     visual_downscale_constant = 2
     save_downscale_constant = 1
@@ -126,16 +124,19 @@ def homography_transform(image, get_save=False):
     image = cv2.resize(image, (int(640*upscale_constant), int(480*upscale_constant)), 
                 interpolation = cv2.INTER_LINEAR)
     dst = cv2.warpPerspective(image,Mimg,original_size * upscale_constant)
-    dst = cv2.rotate(dst, cv2.ROTATE_90_CLOCKWISE)
-    showdst = cv2.resize(dst, (int(480*upscale_constant / visual_downscale_constant), int(640*upscale_constant / visual_downscale_constant)), 
-                interpolation = cv2.INTER_LINEAR)
+    # dst = cv2.rotate(dst, cv2.ROTATE_90_CLOCKWISE)
+    showdst = dst #cv2.resize(dst, (int(480*upscale_constant / visual_downscale_constant), int(640*upscale_constant / visual_downscale_constant)), 
+                # interpolation = cv2.INTER_LINEAR)
     return showdst, save_image
 
 # try:
+
+read_dir = '/datastor1/calebc/public/data/mimic/cleaned/'
+save_dir = '/datastor1/calebc/public/data/mimic/clean_state_trajectories/'
 plt.rcParams['figure.figsize'] = [10, 10]
-for traj in range(51,60):
+for traj in range(0,100):
     try:
-        read_path = f'/datastor1/calebc/public/data/mimic/cleaned/trajectory_data{traj}.hdf5'
+        read_path = read_dir + f'trajectory_data{traj}.hdf5'
         dataset_dict = {}
         dataset_dict = load_hdf5_to_dict(read_path)
         xs,ys = [], []
@@ -143,7 +144,10 @@ for traj in range(51,60):
         for i, img in enumerate(dataset_dict['train_img']):
             train_img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
             dst, save_img = homography_transform(train_img)
-            refined_img, idx,mask = find_hsv_puck(dst, [0,100,50], [50,255,255])
+            green = [[40,100,50], [80,255,255]]
+            red = [[0,100,50], [50,255,255]]
+            
+            refined_img, idx,mask = find_hsv_puck(dst, color=red, apply_mask=False)
             x,y = np.median(idx[0]), np.median(idx[1])
             xs.append(x)
             ys.append(y)
@@ -174,7 +178,7 @@ for traj in range(51,60):
         plt.close()
         
         # Create a new HDF5 file
-        save_path = f'/datastor1/calebc/public/data/mimic/clean_state_trajectories/state_trajectory_data{traj}.hdf5'
+        save_path = save_dir + f'state_trajectory_data{traj}.hdf5'
         dataset_dict['puck_state'] = xy_robot_frame
         dataset_dict['puck_state_nan_mask'] = np.isnan(xy_robot_frame)
         with h5py.File(save_path, 'w') as hdf5_file:
@@ -182,8 +186,8 @@ for traj in range(51,60):
             save_dict_to_hdf5(dataset_dict, hdf5_file)
             
         print(f'finished traj {traj}')
-    except:
-        print('asdf')
+    except Exception as e:
+        print(e)
         pass
     
 
