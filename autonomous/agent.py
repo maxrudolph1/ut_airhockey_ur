@@ -7,6 +7,19 @@ import torch.nn as nn
 from autonomous.autonomous import AutonomousModel
 from typing import Tuple
 
+class ClipTable(object):
+    '''
+    Takes numpy image [H, W, C] and returns clipped image [H, W, C] with the same shape
+    '''
+    def __call__(self, X):
+        X = np.copy(X)
+        X[170:, :, :] = 0
+        return X
+    
+    def __repr__(self):
+        return self.__class__.__name__ + '()'
+
+
 class Agent(AutonomousModel):
     def __init__(self, img_size, puck_history_len, device, target_config = 'train_ppo.yaml', puck_detector=None):
         super().__init__(target_config)
@@ -27,7 +40,8 @@ class Agent(AutonomousModel):
         #     "init_form": 'knorm'
         # })
         # self.network = MLPNetwork(args)
-        self.obs_dim = 1 + 6 + 6 + 6 + 3 + 3 * puck_history_len # estop + pose + speed + force + acc + last 3 puck pos (with missing indicator)
+        self.obs_dim = 1 + 6 + 6 + 6 + 3 + 3 * puck_history_len # estop + pose + speed + force + acc + last $puck_history_len puck pos (with missing indicator)
+        print('obs_dim', self.obs_dim)
         self.act_dim = 2
         self.img_size = img_size
         self.puck_history_len = puck_history_len
@@ -35,7 +49,6 @@ class Agent(AutonomousModel):
         # if args.gpu >= 0: self.network.cuda(device=args.gpu)
         self.device = device
         self.puck_detector = puck_detector
-
 
     def _compute_state(self, pose, speed, i, puck_history):
         state_info = dict()

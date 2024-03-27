@@ -10,8 +10,9 @@ def mlp(sizes, activation=nn.Tanh, output_activation=nn.Identity):
         layers += [nn.Linear(sizes[j], sizes[j + 1]), act()]
     return nn.Sequential(*layers)
 
-def resnet(num_outputs, output_activation=nn.Identity, pretrained=True):
+def resnet(num_outputs, num_input_channels=3, output_activation=nn.Identity, pretrained=True):
     model = torch.hub.load('pytorch/vision:v0.9.0', 'resnet18', pretrained=pretrained)
+    model.conv1 = nn.Conv2d(num_input_channels, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
     model.fc = nn.Sequential(
         nn.Linear(model.fc.in_features, num_outputs),
         output_activation()
