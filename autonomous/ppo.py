@@ -19,7 +19,7 @@ class PPO(Agent):
         self.num_ppo_updates = num_ppo_updates
         self.policy = ActorCritic(self.obs_dim, self.act_dim, hidden_sizes, nn.ReLU, device).to(device)
         self.optimizer = optim.Adam(self.policy.parameters(), lr=learning_rate)
-        self.buffer = PPOBuffer(self.obs_dim, self.act_dim, buffer_size, gamma, lam)
+        self.buffer = PPOBuffer(self.obs_dim, self.act_dim, buffer_size, self.device, gamma, lam)
         self.traj_counter = 0
 
     def train(self, measured_vals, images, puck_history):
@@ -49,6 +49,7 @@ class PPO(Agent):
             mean_pi_loss = 0
             mean_entropy = 0
             mean_v_loss = 0
+            print(self.buffer.ptr, self.batch_size)
             for _ in range(self.num_ppo_updates):
                 batch = self.buffer.sample_batch(self.batch_size)
                 self.optimizer.zero_grad()
