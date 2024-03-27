@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 class BCBuffer:
-    def __init__(self, obs_dim, act_dim, device, val_split = 0.2, size=5000):
+    def __init__(self, obs_dim, act_dim, device, size=5000, val_split = 0.05):
         self.obs_buf = np.zeros((size, obs_dim), dtype=np.float32)
         self.act_buf = np.zeros((size, act_dim), dtype=np.float32)
 
@@ -20,7 +20,9 @@ class BCBuffer:
         self.obs_buf = np.array(obs)
         self.act_buf = np.array(act)
         self.size = len(obs)
-        self.train_ids = np.random.randint(low=0, high=self.size, size=int(self.size*(1-self.val_split)), replace=False)
+        # self.train_ids = np.random.randint(low=0, high=self.size, size=int(self.size*(1-self.val_split)), replace=False)
+        print('Size: ', int(self.size*(1-self.val_split)))
+        self.train_ids = np.random.choice(np.arange(self.size), size=int(self.size*(1-self.val_split)), replace=False)
         self.val_ids = np.array([i for i in range(self.size) if i not in self.train_ids])
 
     def sample_batch_train(self, batch_size=32):
