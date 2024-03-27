@@ -40,7 +40,7 @@ class Agent(AutonomousModel):
         #     "init_form": 'knorm'
         # })
         # self.network = MLPNetwork(args)
-        self.obs_dim = 1 + 6 + 6 + 6 + 3 + 3 * puck_history_len # estop + pose + speed + force + acc + last $puck_history_len puck pos (with missing indicator)
+        self.obs_dim = 1 + 6 + 6 + 6 + 3 + 3 * puck_history_len + 2 + 3 # estop + pose + speed + force + acc + last $puck_history_len puck pos (with missing indicator) + puck_vel + paddle_puck_rel
         print('obs_dim', self.obs_dim)
         self.act_dim = 2
         self.img_size = img_size
