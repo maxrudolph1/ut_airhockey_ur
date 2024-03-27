@@ -10,11 +10,12 @@ from networks.network_utils import pytorch_model
 from autonomous.agent import Agent, ClipTable
 from autonomous.models import mlp, resnet
 from autonomous.buffer import BCBuffer
+from autonomous.dataloader import BCBufferDataset, create_dataloader
 import cv2
 from PIL import Image
 
 class BehaviorCloning(Agent):
-    def __init__(self, hidden_sizes, device, learning_rate, batch_size, num_iter, frame_stack=4, img_size=(224, 224), puck_history_len = 3, input_mode='img', target_config='train_ppo.yaml', dataset_path='/datastor1/calebc/public/data', data_mode=['mimic', 'mouse'], save_freq=500, save_dir='frame_stack', log_freq=100, puck_detector=None):
+    def __init__(self, hidden_sizes, device, learning_rate, batch_size, num_iter, frame_stack=4, img_size=(224, 224), puck_history_len = 3, input_mode='img', target_config='train_ppo.yaml', dataset_path='/datastor1/calebc/public/data', data_mode=['mimic', 'mouse'], save_freq=500, save_dir='frame_stack', log_freq=1, puck_detector=None):
         super().__init__(img_size, puck_history_len, device, target_config, puck_detector)
         self.learning_rate = learning_rate
         self.batch_size = batch_size
@@ -45,7 +46,7 @@ class BehaviorCloning(Agent):
         if self.input_mode == 'img':
             self.policy = resnet(self.act_dim, num_input_channels=3*self.frame_stack, output_activation=nn.Tanh, pretrained=True).to(self.device)
         else:
-            self.policy = mlp([self.obs_dim] + [64, 64] + [self.act_dim], activation=nn.ReLU, output_activation=nn.Tanh).to(self.device)
+            self.policy = mlp([self.obs_dim] + hidden_sizes + [self.act_dim], activation=nn.ReLU, output_activation=nn.Tanh).to(self.device)
         self.optimizer = optim.Adam(self.policy.parameters(), lr=self.learning_rate)
 
     def populate_buffer(self):
@@ -108,34 +109,39 @@ class BehaviorCloning(Agent):
         print(np.max(acts), np.min(acts))
         self.buffer.store_all(obs, acts, imgs)
 
+    def load_data(self):
+        self.dataloader = create_dataloader(self.dataset_path, self.data_mode, self.img_size, self.frame_stack, self.puck_history_len, self.input_mode, self.batch_size)
 
     def train_offline(self):
         mean_loss = 0
         running_mean = 0
-        for i in range(self.num_iter):
-            batch = self.buffer.sample_batch(4)
-            self.optimizer.zero_grad()
-            if self.input_mode == 'img':
-                action_pred = self.policy(batch['img'])
-            else:
-                action_pred = self.policy(batch['obs'])
+        iter_num = 0
+        for ep in range(self.num_iter):
+            for i, batch in enumerate(self.dataloader):
+                # batch = self.buffer.sample_batch(4)
+                self.optimizer.zero_grad()
+                if self.input_mode == 'img':
+                    action_pred = self.policy(batch['img'].to(self.device))
+                else:
+                    action_pred = self.policy(batch['obs'])
 
-            loss = ((action_pred - batch['act']) ** 2).mean()
-            mean_loss += loss.item()
-            running_mean += loss.item()
-            loss.backward()
-            self.optimizer.step()
+                loss = ((action_pred - batch['act'].to(self.device)) ** 2).mean()
+                mean_loss += loss.item()
+                running_mean += loss.item()
+                loss.backward()
+                self.optimizer.step()
 
-            if (i+1) % self.log_freq == 0:
-                print('Iteration:', i+1, 'Loss:', running_mean / self.log_freq)
-                running_mean = 0
+                if (iter_num+1) % self.log_freq == 0:
+                    print('Iteration:', iter_num+1, 'Loss:', running_mean / self.log_freq)
+                    running_mean = 0
 
-            if i % self.save_freq == 0:
-                torch.save(self.policy.state_dict(), os.path.join(self.save_dir, 'bc_model_' + str(i) + '.pt'))
-                print('Model saved at iteration:', i)
+                if iter_num % self.save_freq == 0:
+                    torch.save(self.policy.state_dict(), os.path.join(self.save_dir, 'bc_model_' + str(iter_num) + '.pt'))
+                    print('Model saved at iteration:', iter_num)
+                iter_num += 1
         torch.save(self.policy.state_dict(), os.path.join(self.save_dir, 'bc_model_final.pt'))
         # print('Model saved at iteration:', i)
-        return {'loss': mean_loss / self.num_iter}
+        return {'loss': mean_loss / iter_num}
     
     def load_model(self, model_path):
         self.policy.load_state_dict(torch.load(model_path))
