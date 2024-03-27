@@ -15,16 +15,11 @@ import cv2
 from PIL import Image
 
 class BehaviorCloning(Agent):
-    def __init__(self, hidden_sizes, device, learning_rate, batch_size, num_iter, frame_stack=4, img_size=(224, 224), puck_history_len = 3, input_mode='img', target_config='train_ppo.yaml', dataset_path='/datastor1/calebc/public/data', data_mode=['mimic', 'mouse'], save_freq=500, save_dir='frame_stack', log_freq=1, puck_detector=None):
+    def __init__(self, hidden_sizes, device, learning_rate, batch_size, num_iter, frame_stack=4, img_size=(224, 224), puck_history_len = 5, input_mode='state', target_config='train_ppo.yaml', dataset_path='/datastor1/calebc/public/data', data_mode=['mimic', 'mouse'], save_freq=500, save_dir='/datastor1/siddhant/test_state2', log_freq=100, puck_detector=None):
         super().__init__(img_size, puck_history_len, device, target_config, puck_detector)
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.num_iter = num_iter
-        
-        if frame_stack > 1:
-            self.buffer = BCBuffer(self.obs_dim, self.act_dim, [frame_stack, *img_size, 3], device, 5000)
-        else:
-            self.buffer = BCBuffer(self.obs_dim, self.act_dim, [*img_size, 3], device, 5000)
         self.dataset_path = dataset_path
         self.data_mode = data_mode
         self.save_freq = save_freq
@@ -49,97 +44,132 @@ class BehaviorCloning(Agent):
             self.policy = mlp([self.obs_dim] + hidden_sizes + [self.act_dim], activation=nn.ReLU, output_activation=nn.Tanh).to(self.device)
         self.optimizer = optim.Adam(self.policy.parameters(), lr=self.learning_rate)
 
-    def populate_buffer(self):
+        self.load_data()
+
+    def load_data(self):
+        if self.input_mode == 'img':
+            self.load_img_data()
+        else:
+            self.load_state_data()
+
+    def load_state_data(self):
         '''
         Load datasets from hdf5 file and store in buffer
         '''
+        self.buffer = BCBuffer(self.obs_dim, self.act_dim, self.device, 5000)
         for mode in self.data_mode:
             data_dir = os.path.join(self.dataset_path, mode)
-            data_dir = os.path.join(data_dir, 'cleaned')
+            data_dir = os.path.join(data_dir, 'clean_state_trajectories')
             print('Loading data from:', data_dir)
             obs = []
-            imgs = []
             acts = []
             for file in os.listdir(data_dir):
-                
-                with h5py.File(os.path.join(data_dir, file), 'r') as f:
-                    # try:
-                    dat_imgs = np.array(f['train_img'])
-                    measured_vals = np.array(f['train_vals'])
+                try:
+                    with h5py.File(os.path.join(data_dir, file), 'r') as f:
+                        measured_vals = np.array(f['train_vals'])
+                        puck_pos = np.array(f['puck_state'])
+                        puck_pos = np.concatenate((puck_pos[1:, :].T, puck_pos[0:1, :].T), 1)
 
-                    puck_history = [(-1.5,0,0) for i in range(self.puck_history_len)]
+                        puck_nan_mask = np.array(f['puck_state_nan_mask'])
+                        puck_nan_mask = np.concatenate((puck_nan_mask[1:, :].T, puck_nan_mask[0:1, :].T), 1)
 
-                    # if self.frame_stack > 1:
-                    #     dat_imgs = np.concatenate([np.zeros([self.frame_stack-1, *dat_imgs.shape[1:]]), dat_imgs], axis=0)
-                    # for i in range(self.frame_stack-1, len(dat_imgs)):
-                    #     img = dat_imgs[i-self.frame_stack+1:i+1]
-                    #     measured_val = measured_vals[i - self.frame_stack + 1]
-                    # cv2.imshow('img', new_img)
-                    # cv2.waitKey(0) #170
-                    frame_stacked = []
-                    for i in range(self.frame_stack-1):
-                        frame_stacked.append(self.transform_img(dat_imgs[i]))
+                        puck_history = [[-1.5,0, 0] for i in range(self.puck_history_len)]
+                        last_puck_pos = [-1.5,0, 0]
+                        for puck_state, puck_mask, measured_val in zip(puck_pos, puck_nan_mask, measured_vals):
+                            obs_from_measured_val = measured_val[3:-6]
+                            act = measured_val[-6:-4] - measured_val[4:6] # delta x, delta y
+                            act/=[0.26, 0.12]
+                            # if self.puck_detector is not None:
+                            #     puck = self.puck_detector(img, puck_history)
+                            #     puck_history = puck_history[1:] + [puck]
 
-                    for img, measured_val in zip(dat_imgs[self.frame_stack-1:], measured_vals[self.frame_stack-1:]):
-                        obs_from_measured_val = measured_val[3:-6]
-                        act = measured_val[-6:-4] - measured_val[4:6] # delta x, delta y
-                        act/=[0.26, 0.12]
-                        if self.puck_detector is not None:
-                            puck = self.puck_detector(img, puck_history)
-                            puck_history = puck_history[1:] + [puck]
-                        # print(obs_from_measured_val.shape, act.shape, img.shape, np.array(puck_history).shape)
-                        obs_from_measured_val = np.concatenate([obs_from_measured_val, *[puck_history[i] for i in range(self.puck_history_len)]])
-                        obs.append(obs_from_measured_val)
-                        acts.append(act)
-                        # print('Image transformation')
-                        # print(img)
-                        transformed_img = self.transform_img(img)
-                        frame_stacked.append(transformed_img)
-                        # print(transformed_img)
-                        # print('--------------------------------')
-                        # print('stacked_img_shape: ', torch.cat(frame_stacked, axis=0).shape)
-                        imgs.append(torch.cat(frame_stacked, axis=0))
-                        frame_stacked.pop(0)
-                    # except Exception as e:
-                        # print('Error in file:', file, e)
+                            is_occluded = puck_mask[0] or puck_mask[1]
+                            if np.isnan(puck_state).any():
+                                if not is_occluded:
+                                    print('Is Occluded is False but puck state is nan')
+                            if is_occluded:
+                                if not np.isnan(puck_state).any():
+                                    print('Is Occluded is True but puck state is not nan')
+                            # print(obs_from_measured_val.shape, act.shape, img.shape, np.array(puck_history).shape)
+                            if is_occluded:
+                                puck_history = puck_history[1:] + [last_puck_pos]
+                            else:
+                                # if is_occluded:
+                                #     print('Else: ', is_occluded)
+                                # if np.isnan(puck_state).any():
+                                #     print('Puck state is nan', is_occluded, puck_mask, puck_state)
+                                last_puck_pos = (puck_state.tolist() + [float(is_occluded)])
+                                puck_history = puck_history[1:] + [puck_state.tolist() + [float(is_occluded)]]
+
+                            obs_from_measured_val = np.concatenate([obs_from_measured_val.reshape(1, -1), np.array(puck_history).reshape(1, -1)], 1).squeeze(0)
+                            obs.append(obs_from_measured_val)
+                            acts.append(act)
+                            # print('Image transformation')
+                            # print(img)
+                            # transformed_img = self.transform_img(img)
+                            # frame_stacked.append(transformed_img)
+                            # print(transformed_img)
+                            # print('--------------------------------')
+                            # print('stacked_img_shape: ', torch.cat(frame_stacked, axis=0).shape)
+                            # imgs.append(torch.cat(frame_stacked, axis=0))
+                            # frame_stacked.pop(0)
+                except Exception as e:
+                    print('Error in file:', file, e)
+                    exit()
                         # continue
             
         print('Storing data in buffer')
-        print(len(imgs), imgs[0].shape)
+        # print(len(imgs), imgs[0].shape)
         print(np.max(acts), np.min(acts))
-        self.buffer.store_all(obs, acts, imgs)
+        self.buffer.store_all(obs, acts)
 
-    def load_data(self):
+    def load_img_data(self):
         self.dataloader = create_dataloader(self.dataset_path, self.data_mode, self.img_size, self.frame_stack, self.puck_history_len, self.input_mode, self.batch_size)
+        self.dataloader_iter = iter(self.dataloader)
+
+    def sample(self):
+        if self.input_mode == 'img':
+            try: 
+                return next(self.dataloader_iter)
+            except StopIteration:
+                self.dataloader_iter = iter(self.dataloader)
+                return next(self.dataloader_iter)
+        else:
+            return self.buffer.sample_batch(self.batch_size)
 
     def train_offline(self):
+        self.policy.train()
         mean_loss = 0
         running_mean = 0
-        iter_num = 0
-        for ep in range(self.num_iter):
-            for i, batch in enumerate(self.dataloader):
-                # batch = self.buffer.sample_batch(4)
-                self.optimizer.zero_grad()
-                if self.input_mode == 'img':
-                    action_pred = self.policy(batch['img'].to(self.device))
+        for iter_num in range(self.num_iter):
+            # for i, batch in enumerate(self.dataloader):
+            batch = self.sample()
+            self.optimizer.zero_grad()
+            if self.input_mode == 'img':
+                action_pred = self.policy(batch['img'].to(self.device))
+            else:
+                action_pred = self.policy(batch['obs'])
+                # print(action_pred)
+
+
+            loss = ((action_pred - batch['act'].to(self.device)) ** 2).mean()
+            mean_loss += loss.item()
+            running_mean += loss.item()
+            loss.backward()
+            self.optimizer.step()
+
+            if (iter_num) % self.log_freq == 0:
+                if iter_num != 0:
+                    print('Iteration:', iter_num, 'Loss:', running_mean / self.log_freq)
                 else:
-                    action_pred = self.policy(batch['obs'])
+                    print('Iteration:', iter_num, 'Loss:', running_mean)
+                running_mean = 0
 
-                loss = ((action_pred - batch['act'].to(self.device)) ** 2).mean()
-                mean_loss += loss.item()
-                running_mean += loss.item()
-                loss.backward()
-                self.optimizer.step()
-
-                if (iter_num+1) % self.log_freq == 0:
-                    print('Iteration:', iter_num+1, 'Loss:', running_mean / self.log_freq)
-                    running_mean = 0
-
-                if iter_num % self.save_freq == 0:
-                    torch.save(self.policy.state_dict(), os.path.join(self.save_dir, 'bc_model_' + str(iter_num) + '.pt'))
-                    print('Model saved at iteration:', iter_num)
-                iter_num += 1
+            if iter_num % self.save_freq == 0:
+                torch.save(self.policy.state_dict(), os.path.join(self.save_dir, 'bc_model_' + str(iter_num) + '.pt'))
+                print('Model saved at iteration:', iter_num)
         torch.save(self.policy.state_dict(), os.path.join(self.save_dir, 'bc_model_final.pt'))
+        self.policy.eval()
         # print('Model saved at iteration:', i)
         return {'loss': mean_loss / iter_num}
     

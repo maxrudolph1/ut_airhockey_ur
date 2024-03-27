@@ -2,33 +2,38 @@ import torch
 import numpy as np
 
 class BCBuffer:
-    def __init__(self, obs_dim, act_dim, img_size, device, size=5000):
+    def __init__(self, obs_dim, act_dim, device, val_split = 0.2, size=5000):
         self.obs_buf = np.zeros((size, obs_dim), dtype=np.float32)
         self.act_buf = np.zeros((size, act_dim), dtype=np.float32)
-        self.img_buf = np.zeros((size, *img_size), dtype=np.float32)
 
         self.ptr, self.size, self.max_size = 0, 0, size
         self.device = device
+        self.val_split = val_split
 
-    def store(self, obs, act, img):
+    def store(self, obs, act):
         self.obs_buf[self.ptr] = obs
         self.act_buf[self.ptr] = act
-        self.img_buf[self.ptr] = img
         self.ptr = (self.ptr + 1) % self.max_size
         self.size = min(self.size + 1, self.max_size)
 
-    def store_all(self, obs, act, img):
+    def store_all(self, obs, act):
         self.obs_buf = np.array(obs)
         self.act_buf = np.array(act)
-        self.img_buf = torch.stack(img)
         self.size = len(obs)
+        self.train_ids = np.random.randint(low=0, high=self.size, size=int(self.size*(1-self.val_split)), replace=False)
+        self.val_ids = np.array([i for i in range(self.size) if i not in self.train_ids])
 
-    def sample_batch(self, batch_size=32):
-        idxs = np.random.randint(0, self.size, size=batch_size)
+    def sample_batch_train(self, batch_size=32):
+        idxs = np.random.choice(self.train_ids, size=batch_size)
         return dict(
-            obs=torch.tensor(self.obs_buf[idxs]).to(self.device),
-            img=self.img_buf[idxs].to(self.device),
-            act=torch.tensor(self.act_buf[idxs]).to(self.device)
+            obs=torch.tensor(self.obs_buf[idxs], dtype=torch.float32).to(self.device),
+            act=torch.tensor(self.act_buf[idxs], dtype=torch.float32).to(self.device)
+            )
+    def sample_batch_val(self, batch=32):
+        idxs = np.random.choice(self.val_ids, size=batch)
+        return dict(
+            obs=torch.tensor(self.obs_buf[idxs], dtype=torch.float32).to(self.device),
+            act=torch.tensor(self.act_buf[idxs], dtype=torch.float32).to(self.device)
             )
 
 
