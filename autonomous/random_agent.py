@@ -37,18 +37,18 @@ class RandomAgent(AutonomousModel):
         state_info["pucks"].append({"position": puck_history[i], "velocity": puck_history[i] - puck_history[i-1]})
         return state_info
 
-    def take_action(self, pose, speed, force, acc, estop, image, puck_history, lims, move_lims):
+    def take_action(self, pose, speed, force, acc, estop, image, images, puck_history, lims, move_lims):
         if self.puck_detector is not None: puck = self.puck_detector(image, puck_history)
         else: puck = (puck_history[-1][0],puck_history[-1][1],0)
         prop_input = np.expand_dims(np.concatenate([np.array([estop]).astype(float), np.array(pose), np.array(speed), np.array(force) / 50, np.array(acc),
                                      np.array(puck), np.array(puck_history[-1]), np.array(puck_history[-2])]), axis=0)
         netout = self.network(prop_input)
-        x,y = pytorch_model.unwrap(netout[0])
-        move_vector = np.array((x,-y)) * np.array(move_lims) / 5
+        dx,dy = pytorch_model.unwrap(netout[0])
+        move_vector = np.array((dx,-dy)) * np.array(move_lims) / 5
         delta_vector = move_vector + pose[:2]
         # x, y = clip_limits(delta_vector[0], delta_vector[1],lims)
-        print(netout, move_vector, delta_vector,pose[:2],  x,y)
-        return x,y, puck
+        print(netout, move_vector, delta_vector,pose[:2],  dx,dy)
+        return delta_vector[0], delta_vector[1], puck
 
     def single_agent_step(self, next_state) -> tuple[np.ndarray, float, bool, bool, dict]:
         if self.env.current_timestep > 0:

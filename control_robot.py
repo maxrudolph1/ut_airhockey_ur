@@ -31,7 +31,7 @@ from check_extrinsics import convert_camera_extrinsic
 
 import shutil
 
-def main(control_mode, control_type, load_path = ""):
+def main(control_mode, control_type, load_path = "", additional_args={}):
     '''
         @param control_mode: Where robot actions are generated: teleoperation_modes = mouse, mimic, keyboard, autonomous = BC, RL
         @param control_type: How the robot is controlled (action space), options: rect, pol, prim
@@ -43,7 +43,7 @@ def main(control_mode, control_type, load_path = ""):
     autonomous_modes = ['BC', 'RL', 'rnet']
 
     if control_mode in autonomous_modes:
-        autonomous_model = initialize_agent(control_mode, load_path)
+        autonomous_model = initialize_agent(control_mode, load_path, additional_args=additional_args)
     # control_mode = 'mouse' # 'mimic'
     # control_mode = 'mimic'
 
@@ -55,7 +55,7 @@ def main(control_mode, control_type, load_path = ""):
     shared_image_check[0] = 0
     protected_mouse_pos = ProtectedArray(shared_mouse_pos)
     protected_img_check = ProtectedArray(shared_image_check)
-    cap = None
+    cap, camera_process, mimic_process = None, None, None
     if control_mode == 'mouse':
         camera_process = multiprocessing.Process(target=camera_callback, args=(protected_mouse_pos,protected_img_check))
         camera_process.start()
@@ -188,7 +188,7 @@ def main(control_mode, control_type, load_path = ""):
                 time.sleep(0.7)
 
                 print("To exit press 'q'")
-                measured_values, frames = list(), list()
+                measured_values, images = list(), list()
                 puck_history = [(-1.5,0,0) for i in range(5)] # pretend that the puck starts at the other end of the table, but is occluded, for 5 frames
                 total = time.time()
                 for j in range(2000):
@@ -225,15 +225,17 @@ def main(control_mode, control_type, load_path = ""):
                     
                     if control_mode in ["mouse", "mimic"]:
                         x, y = (pixel_coord - offset_constants) * 0.001
+                        y= -y
                     elif control_mode in ["RL", "BC", 'rnet']:
-                        x,y, puck = autonomous_model.take_action(true_pose, true_speed, true_force, measured_acc, rcv.isProtectiveStopped(), image, puck_history, lims, move_lims) # TODO: add image handling
+                        x,y, puck = autonomous_model.take_action(true_pose, true_speed, true_force, measured_acc, rcv.isProtectiveStopped(), image, images, puck_history, lims, move_lims) # TODO: add image handling
                         puck_history.append(puck)
                     ###### servoL #####
                     if control_type == "pol":
-                        polx, poly = compute_pol(x, -y, true_pose, lims, move_lims)
+                        polx, poly = compute_pol(x, y, true_pose, lims, move_lims)
                         srvpose = ([polx, poly, 0.30] + angle, vel,acc)
                     elif control_type == "rect":
-                        recx, recy = compute_rect(x, -y, true_pose, lims, move_lims)
+                        recx, recy = compute_rect(x, y, true_pose, lims, move_lims)
+                        print(recx - true_pose[0], recy -true_pose[1], true_pose[:2],recx, recy,  x,y)
                         srvpose = ([recx, recy, 0.30] + angle, vel,acc)
                     elif control_type == "prim":
                         x, y = motion_primitive.compute_primitive(val, true_pose, lims, move_lims)
@@ -241,6 +243,7 @@ def main(control_mode, control_type, load_path = ""):
 
                     values = get_data(time.time(), tidx, count, true_pose, true_speed, true_force, measured_acc, srvpose, rcv.isProtectiveStopped())
                     measured_values.append(values), #frames.append(np.array(protected_img[:]).reshape(640,480,3))
+
                     
                     # TODO: change of direction is currently very sudden, we need to tune that
                     # print("servl", srvpose[0][1], true_speed, true_force, measured_acc, ctrl.servoL(srvpose[0], vel, acc, block_time, lookahead, gain))
@@ -265,7 +268,8 @@ def main(control_mode, control_type, load_path = ""):
                 clear_images()
 
     finally:
-        camera_process.kill()
+        if camera_process: camera_process.kill()
+        if mimic_process: mimic_process.kill()
         ctrl.forceModeStop()
         ctrl.stopScript()
 
@@ -273,7 +277,10 @@ def main(control_mode, control_type, load_path = ""):
 
 
 if __name__ == "__main__":
-    control_mode = 'rnet' # mouse, mimic, keyboard, RL, BC, rnet
+    control_mode = 'RL' # mouse, mimic, keyboard, RL, BC, rnet
     control_type = 'rect' # rect, pol or prim
+    additional_args = {"image_input": True, "frame_stack": 1, "algo": "ppo"}
+    # load_path = "models/bc_model_9500.pt"
+    load_path = ""
 
-    main(control_mode, control_type, "")
+    main(control_mode, control_type, load_path, additional_args=additional_args)

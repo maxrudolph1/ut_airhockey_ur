@@ -2,28 +2,37 @@ import torch
 import numpy as np
 
 class BCBuffer:
-    def __init__(self, obs_dim, act_dim, size=5000):
+    def __init__(self, obs_dim, act_dim, img_size, device, size=5000):
         self.obs_buf = np.zeros((size, obs_dim), dtype=np.float32)
         self.act_buf = np.zeros((size, act_dim), dtype=np.float32)
-        self.ptr, self.size, self.max_size = 0, 0, size
+        self.img_buf = np.zeros((size, *img_size), dtype=np.float32)
 
-    def store(self, obs, act):
+        self.ptr, self.size, self.max_size = 0, 0, size
+        self.device = device
+
+    def store(self, obs, act, img):
         self.obs_buf[self.ptr] = obs
         self.act_buf[self.ptr] = act
+        self.img_buf[self.ptr] = img
         self.ptr = (self.ptr + 1) % self.max_size
         self.size = min(self.size + 1, self.max_size)
 
-    def store_all(self, obs, act):
-        self.obs_buf = obs
-        self.act_buf = act
+    def store_all(self, obs, act, img):
+        self.obs_buf = np.array(obs)
+        self.act_buf = np.array(act)
+        self.img_buf = torch.stack(img)
         self.size = len(obs)
 
     def sample_batch(self, batch_size=32):
         idxs = np.random.randint(0, self.size, size=batch_size)
-        return dict(obs=torch.tensor(self.obs_buf[idxs]), act=torch.tensor(self.act_buf[idxs]))
+        return dict(
+            obs=torch.tensor(self.obs_buf[idxs]).to(self.device),
+            img=self.img_buf[idxs].to(self.device),
+            act=torch.tensor(self.act_buf[idxs]).to(self.device)
+            )
     
 class PPOBuffer:
-    def __init__(self, obs_dim, act_dim, size, gamma=0.99, lam=0.95):
+    def __init__(self, obs_dim, act_dim, size, device, gamma=0.99, lam=0.95):
         self.obs_buf = np.zeros((size, obs_dim), dtype=np.float32)
         self.act_buf = np.zeros((size, act_dim), dtype=np.float32)
         self.adv_buf = np.zeros(size, dtype=np.float32)
@@ -34,6 +43,7 @@ class PPOBuffer:
         self.gamma, self.lam = gamma, lam
         self.ptr, self.path_start_idx, self.max_size = 0, 0, size
         self.mean_ret = 0
+        self.device = device
 
     def store(self, obs, act, rew, val, logp):
         assert self.ptr < self.max_size
@@ -42,6 +52,8 @@ class PPOBuffer:
         self.rew_buf[self.ptr] = rew
         self.val_buf[self.ptr] = val
         self.logp_buf[self.ptr] = logp
+
+        self.ptr = (self.ptr + 1) % self.max_size
 
     def reset(self):
         self.ptr, self.path_start_idx = 0, 0
@@ -65,8 +77,8 @@ class PPOBuffer:
 
     def sample_batch(self, batch_size=32):
         idxs = np.random.randint(0, self.ptr, size=batch_size)
-        return dict(obs=torch.as_tensor(self.obs_buf[idxs], dtype=torch.float32),
-                    act=torch.as_tensor(self.act_buf[idxs], dtype=torch.float32),
-                    adv=torch.as_tensor(self.adv_buf[idxs], dtype=torch.float32),
-                    ret=torch.as_tensor(self.ret_buf[idxs], dtype=torch.float32),
-                    logp=torch.as_tensor(self.logp_buf[idxs], dtype=torch.float32))
+        return dict(obs=torch.as_tensor(self.obs_buf[idxs], dtype=torch.float32).to(self.device),
+                    act=torch.as_tensor(self.act_buf[idxs], dtype=torch.float32).to(self.device),
+                    adv=torch.as_tensor(self.adv_buf[idxs], dtype=torch.float32).to(self.device),
+                    ret=torch.as_tensor(self.ret_buf[idxs], dtype=torch.float32).to(self.device),
+                    logp=torch.as_tensor(self.logp_buf[idxs], dtype=torch.float32).to(self.device))

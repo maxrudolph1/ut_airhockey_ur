@@ -3,6 +3,7 @@ import numpy as np
 from gymnasium.spaces import Box
 from gymnasium import spaces
 import math
+from typing import Tuple
 
 
 class AirHockeyEnv(Env):
@@ -356,7 +357,7 @@ class AirHockeyEnv(Env):
     
     def get_joint_reward(self, ego_hit_a_puck, alt_hit_a_puck, 
                          puck_within_ego_home, puck_within_alt_home,
-                         puck_within_ego_goal, puck_within_alt_goal) -> tuple[float, float]:
+                         puck_within_ego_goal, puck_within_alt_goal) -> Tuple[float, float]:
         ego_reward = self.get_reward(ego_hit_a_puck, puck_within_ego_home, 
                                      puck_within_alt_home, puck_within_ego_goal,
                                      self.ego_goal_pos, self.ego_goal_radius)
@@ -375,7 +376,7 @@ class AirHockeyEnv(Env):
         else:
             return self.multi_step(action)
 
-    def single_agent_step(self, action) -> tuple[np.ndarray, float, bool, bool, dict]:
+    def single_agent_step(self, action) -> Tuple[np.ndarray, float, bool, bool, dict]:
         next_state = self.simulator.get_transition(action)
         if self.current_timestep > 0:
             self.old_state = self.current_state

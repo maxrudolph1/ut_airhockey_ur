@@ -28,11 +28,11 @@ def get_data(cur_time, tidx, i, pose, speed, force, acc, desired_pose, estop):
                        np.array([tidx]), # 1 
                        np.array([i]), # 2 
                        np.array([estop]).astype(float), # 3
-                       np.array(pose), # 6
-                       np.array(speed), # 6
-                       np.array(force), # 6
-                       np.array(acc), # 6
-                       np.array(desired_pose[0])]) # 6
+                       np.array(pose), # 4-9
+                       np.array(speed), # 10-15
+                       np.array(force), # 16-21
+                       np.array(acc), # 22-24
+                       np.array(desired_pose[0])]) # 25-31
     return val#, image
 
 def store_data(pth, tidx, count, image_path, images, vals):
@@ -67,11 +67,11 @@ def store_data(pth, tidx, count, image_path, images, vals):
     imgs = np.stack(imgs, axis=0)
     
     vals = np.stack(vals, axis=0)
+    print(imgs.shape, vals.shape)
     if imgs.shape[0] != vals.shape[0]:
         print("MISALIGNED")
         return False
 
-    print(imgs.shape, vals.shape)
     write_trajectory(pth, tidx, imgs, vals)
     return True
 
