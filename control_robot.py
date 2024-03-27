@@ -188,7 +188,7 @@ def main(control_mode, control_type, load_path = "", additional_args={}):
                 time.sleep(0.7)
 
                 print("To exit press 'q'")
-                measured_values, frames = list(), list()
+                measured_values, images = list(), list()
                 puck_history = [(-1.5,0,0) for i in range(5)] # pretend that the puck starts at the other end of the table, but is occluded, for 5 frames
                 total = time.time()
                 for j in range(2000):
@@ -225,15 +225,17 @@ def main(control_mode, control_type, load_path = "", additional_args={}):
                     
                     if control_mode in ["mouse", "mimic"]:
                         x, y = (pixel_coord - offset_constants) * 0.001
+                        y= -y
                     elif control_mode in ["RL", "BC", 'rnet']:
                         x,y, puck = autonomous_model.take_action(true_pose, true_speed, true_force, measured_acc, rcv.isProtectiveStopped(), image, images, puck_history, lims, move_lims) # TODO: add image handling
                         puck_history.append(puck)
                     ###### servoL #####
                     if control_type == "pol":
-                        polx, poly = compute_pol(x, -y, true_pose, lims, move_lims)
+                        polx, poly = compute_pol(x, y, true_pose, lims, move_lims)
                         srvpose = ([polx, poly, 0.30] + angle, vel,acc)
                     elif control_type == "rect":
-                        recx, recy = compute_rect(x, -y, true_pose, lims, move_lims)
+                        recx, recy = compute_rect(x, y, true_pose, lims, move_lims)
+                        print(recx - true_pose[0], recy -true_pose[1], true_pose[:2],recx, recy,  x,y)
                         srvpose = ([recx, recy, 0.30] + angle, vel,acc)
                     elif control_type == "prim":
                         x, y = motion_primitive.compute_primitive(val, true_pose, lims, move_lims)
@@ -246,7 +248,7 @@ def main(control_mode, control_type, load_path = "", additional_args={}):
                     # TODO: change of direction is currently very sudden, we need to tune that
                     # print("servl", srvpose[0][1], true_speed, true_force, measured_acc, ctrl.servoL(srvpose[0], vel, acc, block_time, lookahead, gain))
                     
-                    ctrl.servoL(srvpose[0], vel, acc, block_time, lookahead, gain)
+                    # ctrl.servoL(srvpose[0], vel, acc, block_time, lookahead, gain)
 
                     # print("servl", np.abs(polx - true_pose[0]), np.abs(poly - true_pose[1]), pixel_coord, srvpose[0], rcv.isProtectiveStopped())# , true_speed, true_force, measured_acc, )
                     # print("servl", srvpose[0][:2], x,y, true_pose[:2], rcv.isProtectiveStopped())# , true_speed, true_force, measured_acc, )
@@ -275,8 +277,10 @@ def main(control_mode, control_type, load_path = "", additional_args={}):
 
 
 if __name__ == "__main__":
-    control_mode = 'mouse' # mouse, mimic, keyboard, RL, BC, rnet
+    control_mode = 'RL' # mouse, mimic, keyboard, RL, BC, rnet
     control_type = 'rect' # rect, pol or prim
-    additional_args = {"image_input": True}
+    additional_args = {"image_input": True, "frame_stack": 1, "algo": "ppo"}
+    # load_path = "models/bc_model_9500.pt"
+    load_path = ""
 
-    main(control_mode, control_type, "", additional_args=additional_args)
+    main(control_mode, control_type, load_path, additional_args=additional_args)

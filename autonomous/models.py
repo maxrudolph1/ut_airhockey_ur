@@ -23,11 +23,11 @@ class ActorCritic(nn.Module):
     def __init__(self, obs_dim, act_dim, hidden_sizes, activation, device):
         super().__init__()
         self.device = device
-        self.pi_mean = mlp([obs_dim] + list(hidden_sizes) + [act_dim], activation, nn.Identity)
+        self.pi_mean = mlp([obs_dim] + list(hidden_sizes) + [act_dim], activation, nn.Tanh)
         self.pi_logstd = nn.Parameter(torch.zeros(act_dim))
         self.v = mlp([obs_dim] + list(hidden_sizes) + [1], activation, nn.Identity)
 
-    def forward(self, x, probablistic=True):
+    def compute(self, x, probablistic=True):
         pi_mean = self.pi_mean(x)
         pi_logstd = self.pi_logstd.expand_as(pi_mean)
         v = self.v(x).squeeze(1)
@@ -37,16 +37,17 @@ class ActorCritic(nn.Module):
             return dist, v
         return pi_mean, v
     
-    def act(self, obs):
+    def forward(self, obs):
         with torch.no_grad():
-            dist, _ = self.forward(obs, probablistic=True)
+            dist, _ = self.compute(obs, probablistic=True)
             a = dist.sample()
-            return a.numpy()
+            a = torch.clamp(a, -1, 1)
+            return a.cpu().numpy()
         
     def log_prob(self, obs, act):
-        dist, _ = self.forward(obs, probablistic=True)
+        dist, _ = self.compute(obs, probablistic=True)
         return dist.log_prob(act).sum(axis=-1)
     
     def entropy(self, obs):
-        dist, _ = self.forward(obs, probablistic=True)
+        dist, _ = self.compute(obs, probablistic=True)
         return dist.entropy().sum(axis=-1)

@@ -128,11 +128,13 @@ class BehaviorCloning(Agent):
         if self.input_mode == 'img': # TODO: images would have to be stakced for frame stacking
             puck = (puck_history[-1][0],puck_history[-1][1],0)
             zero_stack = max(0, self.frame_stack - len(images))
-            frame_stack = np.concatenate([np.zeros((images[-1].shape[0], images[-1].shape[1], zero_stack * 3))] + [images[-i] for i in range(1,self.frame_stack + 1 - zero_stack)], axis =-1)
-            image = pytorch_model.wrap(self.transform_img(frame_stack), device=self.device).unsqueeze(0)
+            frame_stack = np.concatenate([np.zeros((images[-1].shape[0], images[-1].shape[1], zero_stack * 3)).astype(np.uint8)] + [images[-i] for i in range(1,self.frame_stack + 1 - zero_stack)], axis =-1)
+            
+            image = pytorch_model.wrap(self.transform_img(frame_stack).float(), device=self.device).unsqueeze(0)
+            # print(self.frame_stack, zero_stack, len(images), self.transform_img(frame_stack))
             netout = self.policy(image)
             delta_x, delta_y = pytorch_model.unwrap(netout[0])
-            move_vector = np.array((delta_x,-delta_y)) * np.array(move_lims) / 5
+            move_vector = np.array((delta_x,delta_y)) * np.array(move_lims)
             x, y = move_vector + pose[:2]
             # x, y = clip_limits(delta_vector[0], delta_vector[1],lims)
             print(netout, move_vector, delta_x, delta_y, pose[:2],  x,y)
