@@ -15,7 +15,25 @@ import cv2
 from PIL import Image
 
 class BehaviorCloning(Agent):
-    def __init__(self, hidden_sizes, device, learning_rate, batch_size, num_iter, frame_stack=4, img_size=(224, 224), puck_history_len = 5, input_mode='state', target_config='train_ppo.yaml', dataset_path='/datastor1/calebc/public/data', data_mode=['mimic', 'mouse'], save_freq=500, save_dir='/datastor1/siddhant/test_state2', log_freq=100, puck_detector=None):
+    def __init__(
+            self, 
+            hidden_sizes, 
+            device, 
+            learning_rate, 
+            batch_size, 
+            num_iter, 
+            frame_stack=4, 
+            img_size=(224, 224), 
+            puck_history_len = 5, 
+            input_mode='state', 
+            target_config='train_ppo.yaml', 
+            dataset_path='/datastor1/calebc/public/data', 
+            data_mode=['mimic', 'mouse'], 
+            save_freq=500, 
+            save_dir='/datastor1/siddhant/state_with_val', 
+            log_freq=100, 
+            eval_freq=1000,
+            puck_detector=None):
         super().__init__(img_size, puck_history_len, device, target_config, puck_detector)
         self.learning_rate = learning_rate
         self.batch_size = batch_size
@@ -25,6 +43,7 @@ class BehaviorCloning(Agent):
         self.save_freq = save_freq
         self.save_dir = save_dir
         self.log_freq = log_freq
+        self.eval_freq = eval_freq
         self.frame_stack = frame_stack
 
         if not os.path.exists(self.save_dir):
@@ -94,25 +113,12 @@ class BehaviorCloning(Agent):
                             if is_occluded:
                                 puck_history = puck_history[1:] + [last_puck_pos]
                             else:
-                                # if is_occluded:
-                                #     print('Else: ', is_occluded)
-                                # if np.isnan(puck_state).any():
-                                #     print('Puck state is nan', is_occluded, puck_mask, puck_state)
                                 last_puck_pos = (puck_state.tolist() + [float(is_occluded)])
                                 puck_history = puck_history[1:] + [puck_state.tolist() + [float(is_occluded)]]
 
                             obs_from_measured_val = np.concatenate([obs_from_measured_val.reshape(1, -1), np.array(puck_history).reshape(1, -1)], 1).squeeze(0)
                             obs.append(obs_from_measured_val)
                             acts.append(act)
-                            # print('Image transformation')
-                            # print(img)
-                            # transformed_img = self.transform_img(img)
-                            # frame_stacked.append(transformed_img)
-                            # print(transformed_img)
-                            # print('--------------------------------')
-                            # print('stacked_img_shape: ', torch.cat(frame_stacked, axis=0).shape)
-                            # imgs.append(torch.cat(frame_stacked, axis=0))
-                            # frame_stacked.pop(0)
                 except Exception as e:
                     print('Error in file:', file, e)
                     exit()
@@ -135,12 +141,35 @@ class BehaviorCloning(Agent):
                 self.dataloader_iter = iter(self.dataloader)
                 return next(self.dataloader_iter)
         else:
-            return self.buffer.sample_batch(self.batch_size)
+            return self.buffer.sample_batch_train(self.batch_size)
+        
+    def sample_val(self):
+        if self.input_mode == 'img':
+            raise NotImplementedError('Validation not supported for image input mode')
+        else:
+            return self.buffer.sample_batch_val(self.batch_size)
+        
+    def eval_val(self):
+        self.policy.eval()
+        if self.input_mode == 'img':
+            raise NotImplementedError('Validation not supported for image input mode')
+        else:
+            num_batches = len(self.buffer.val_ids) // self.batch_size
+            mean_val_loss = 0
+            for i in range(num_batches):
+                batch = self.sample_val()
+                action_pred = self.policy(batch['obs'])
+                loss = ((action_pred - batch['act']) ** 2).mean()
+                mean_val_loss += loss.item()
+            self.policy.train()
+            return {'val_loss': mean_val_loss / num_batches}
+
 
     def train_offline(self):
         self.policy.train()
         mean_loss = 0
         running_mean = 0
+        mean_val_loss = 0
         for iter_num in range(self.num_iter):
             # for i, batch in enumerate(self.dataloader):
             batch = self.sample()
@@ -168,6 +197,13 @@ class BehaviorCloning(Agent):
             if iter_num % self.save_freq == 0:
                 torch.save(self.policy.state_dict(), os.path.join(self.save_dir, 'bc_model_' + str(iter_num) + '.pt'))
                 print('Model saved at iteration:', iter_num)
+            
+            if iter_num % self.eval_freq == 0:
+                val_loss = self.eval_val()
+                mean_val_loss += val_loss['val_loss']
+                print('Validation loss:', val_loss['val_loss'])
+
+
         torch.save(self.policy.state_dict(), os.path.join(self.save_dir, 'bc_model_final.pt'))
         self.policy.eval()
         # print('Model saved at iteration:', i)
@@ -196,46 +232,3 @@ class BehaviorCloning(Agent):
         else:
             super().take_action(pose, speed, force, acc, estop, image, puck_history, lims, move_lims)
         return x, y, puck
-
-
-# class BehaviorCloning():
-#     def __init__(self, obs_dim, act_dim, hidden_sizes, activation, learning_rate, batch_size, num_iter, device):
-#         self.device = device
-#         self.model = mlp([obs_dim] + list(hidden_sizes) + [act_dim], activation, nn.Identity).to(device)
-#         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
-#         self.batch_size = batch_size
-#         self.num_iter = num_iter
-
-#     def take_action(self, true_pose, true_speed, true_force, measured_acc, srvpose, estop, image):
-#         state_vals = torch.tensor([true_pose, true_speed, true_force, measured_acc], dtype=torch.float32).to(self.device)
-#         action = self.model(state_vals)
-#         return action.detach().cpu().numpy()
-    
-#     def train(self, measured_values, images):
-#         # time.time(), tidx, count, true_pose, true_speed, true_force, measured_acc, srvpose, rcv.isProtectiveStopped() = measured_values
-#         states = measured_values[:, 3:7]
-#         actions = measured_values[:, 7]
-#         actions = actions[:, :2]
-
-#         bc_buffer = BCBuffer(states.shape[1], actions.shape[1], len(states))
-#         bc_buffer.store_all(states, actions)
-
-#         mean_loss = 0
-
-#         for _ in range(self.num_iter):
-#             batch = bc_buffer.sample_batch(self.batch_size)
-#             self.optimizer.zero_grad()
-#             action_pred = self.model(batch['obs'])
-#             loss = ((action_pred - batch['act']) ** 2).mean()
-#             mean_loss += loss.item()
-#             loss.backward()
-#             self.optimizer.step()
-        
-#         return {'loss': mean_loss / self.num_iter}
-    
-
-# if __name__ == '__main__':
-#     bc = BehaviorCloning([64, 64], 'cuda', 3e-4, 128, 10000)
-#     bc.populate_buffer()
-#     # bc.load_model('models/bc_model_900.pt')
-#     bc.train_offline()
