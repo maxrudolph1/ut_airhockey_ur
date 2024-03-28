@@ -40,7 +40,7 @@ class Agent(AutonomousModel):
         #     "init_form": 'knorm'
         # })
         # self.network = MLPNetwork(args)
-        self.obs_dim = 1 + 6 + 6 + 6 + 3 + 3 * puck_history_len + 2 + 3 # estop + pose + speed + force + acc + last $puck_history_len puck pos (with missing indicator) + puck_vel + paddle_puck_rel
+        self.obs_dim = 1 + 6 + 6 + 6 + 3 + 3 * puck_history_len + 2 + 2 # estop + pose + speed + force + acc + last $puck_history_len puck pos (with missing indicator) + puck_vel + paddle_puck_rel
         print('obs_dim', self.obs_dim)
         self.act_dim = 2
         self.img_size = img_size
@@ -49,6 +49,8 @@ class Agent(AutonomousModel):
         # if args.gpu >= 0: self.network.cuda(device=args.gpu)
         self.device = device
         self.puck_detector = puck_detector
+        self.dataset_state_mean = np.load('/datastor1/calebc/public/data/mouse_mimic_mean.npy')
+        self.dataset_state_std = np.load('/datastor1/calebc/public/data/mouse_mimic_std.npy')
 
     def _compute_state(self, pose, speed, i, puck_history):
         state_info = dict()
@@ -64,8 +66,12 @@ class Agent(AutonomousModel):
         if self.puck_detector is not None: puck = self.puck_detector(image, puck_history)
         else: puck = (puck_history[-1][0],puck_history[-1][1],0)
         puck_vals = np.concatenate( [np.array(puck_history[-i]) for i in range(1,self.puck_history_len)] + [np.array(puck)])
+        puck_vel = np.array(puck)[:2] - np.array(puck_history[-1])[:2]
+        paddle_puck_rel = np.array(pose[:2]) - np.array(puck)
         prop_input = np.expand_dims(np.concatenate([np.array([estop]).astype(float), np.array(pose), np.array(speed), np.array(force) / 50, np.array(acc),
-                                     puck_vals]), axis=0)
+                                     puck_vals, puck_vel, paddle_puck_rel]), axis=0)
+        prop_input -= self.dataset_state_mean
+        prop_input /= self.dataset_state_std
         prop_input = pytorch_model.wrap(prop_input, device=self.device)
         netout = self.policy(prop_input)
         delta_x, delta_y = pytorch_model.unwrap(netout[0])
