@@ -30,7 +30,7 @@ class BehaviorCloning(Agent):
             dataset_path='/datastor1/calebc/public/data', 
             data_mode=['mimic', 'mouse'], 
             save_freq=500, 
-            save_dir='/datastor1/siddhant/state_with_val', 
+            save_dir='/datastor1/siddhant/state_no_force_no_acc', 
             log_freq=100, 
             eval_freq=1000,
             puck_detector=None):
@@ -45,6 +45,9 @@ class BehaviorCloning(Agent):
         self.log_freq = log_freq
         self.eval_freq = eval_freq
         self.frame_stack = frame_stack
+        self.input_mode = input_mode
+        if self.input_mode == 'goal':
+            self.obs_dim += 2 - self.puck_history_len * 3
 
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
@@ -56,7 +59,7 @@ class BehaviorCloning(Agent):
             torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
 
-        self.input_mode = input_mode
+        
         if self.input_mode == 'img':
             self.policy = resnet(self.act_dim, num_input_channels=3*self.frame_stack, output_activation=nn.Tanh, pretrained=True).to(self.device)
         else:
@@ -68,8 +71,46 @@ class BehaviorCloning(Agent):
     def load_data(self):
         if self.input_mode == 'img':
             self.load_img_data()
-        else:
+        elif self.input_mode == 'state':
             self.load_state_data()
+        elif self.input_mode == 'goal':
+            self.load_goal_data()
+
+    def load_goal_data(self):
+        '''
+        Load datasets from hdf5 file and store in buffer
+        '''
+        self.buffer = BCBuffer(self.obs_dim, self.act_dim, self.device, 5000)
+        for mode in self.data_mode:
+            data_dir = os.path.join(self.dataset_path, mode)
+            data_dir = os.path.join(data_dir, 'reaching')
+            print('Loading data from:', data_dir)
+            obs = []
+            acts = []
+            for file in os.listdir(data_dir):
+                try:
+                    with h5py.File(os.path.join(data_dir, file), 'r') as f:
+                        measured_vals = np.array(f['train_vals'])
+                        goal_vals = np.array(f['goals'])
+                        dones = np.array(f['dones'])
+                        for measured_val, goal_val, done in zip(measured_vals, goal_vals, dones):
+                            obs_from_measured_val = measured_val[3:16]
+                            goal = goal_val[4:6]
+                            act = measured_val[-6:-4] - measured_val[4:6] # delta x, delta y
+                            act/=[0.26, 0.12]
+                            if not done:
+                                obs.append(np.concatenate([obs_from_measured_val, goal]))
+                                acts.append(act)
+                except Exception as e:
+                    print('Error in file:', file, e)
+                    exit()
+                        # continue
+        
+        print('Storing data in buffer')
+        # print(len(imgs), imgs[0].shape)
+        print(np.max(acts), np.min(acts))
+        self.buffer.store_all(obs, acts)
+
 
     def load_state_data(self):
         '''
@@ -95,7 +136,7 @@ class BehaviorCloning(Agent):
                         puck_history = [[-1.5,0, 0] for i in range(self.puck_history_len)]
                         last_puck_pos = [-1.5,0, 0]
                         for puck_state, puck_mask, measured_val in zip(puck_pos, puck_nan_mask, measured_vals):
-                            obs_from_measured_val = measured_val[3:-6]
+                            obs_from_measured_val = measured_val[3:16]
                             act = measured_val[-6:-4] - measured_val[4:6] # delta x, delta y
                             act/=[0.26, 0.12]
                             # if self.puck_detector is not None:
@@ -231,4 +272,18 @@ class BehaviorCloning(Agent):
             return x, y, puck
         else:
             super().take_action(pose, speed, force, acc, estop, image, puck_history, lims, move_lims)
+        return x, y, puck
+    
+    def take_action_gc(self, pose, speed, force, acc, estop, image,images, puck_history, lims, move_lims, goal):
+        if self.puck_detector is not None: puck = self.puck_detector(image, puck_history)
+        else: puck = (puck_history[-1][0],puck_history[-1][1],0)
+        # puck_vals = np.concatenate( [np.array(puck_history[-i]) for i in range(1,self.puck_history_len)] + [np.array(puck)])
+        prop_input = np.expand_dims(np.concatenate([np.array([estop]).astype(float), np.array(pose), np.array(speed), np.array(goal)]), axis=0)
+        prop_input = pytorch_model.wrap(prop_input, device=self.device)
+        netout = self.policy(prop_input)
+        delta_x, delta_y = pytorch_model.unwrap(netout[0])
+        move_vector = np.array((delta_x,delta_y)) * np.array(move_lims) / 5
+        x, y = move_vector + pose[:2]
+        # x, y = clip_limits(delta_vector[0], delta_vector[1],lims)
+        print(netout, move_vector, delta_x, delta_y, pose[:2],  x,y)
         return x, y, puck

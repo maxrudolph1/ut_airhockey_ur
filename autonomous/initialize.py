@@ -16,6 +16,9 @@ def initialize_agent(control_mode, load_path, additional_args):
             agent = BehaviorCloning(list(), "cuda:0", 0.0004, 512, 1, input_mode='img', frame_stack=additional_args["frame_stack"])
         else:
             agent = BehaviorCloning([512], "cuda:0", 0.0004, 512, 1, puck_history_len = 5, input_mode='img', target_config='train_ppo.yaml', dataset_path='/datastor1/calebc/public/data', data_mode='mouse')
+        
+    if control_mode == 'reachBC':
+        agent = BehaviorCloning([256, 256], "cuda:0", 0.0004, 512, 1, puck_history_len = 5, input_mode='goal', target_config='train_ppo.yaml', dataset_path='/datastor1/calebc/public/data', data_mode='mouse')
     if control_mode == 'rnet':
         agent = RandomAgent([512], puck_detector=puck_detector)
     if len(load_path) > 0:

@@ -31,6 +31,11 @@ from check_extrinsics import convert_camera_extrinsic
 
 import shutil
 
+def sample_reach_goal(x_min, x_max, y_min, y_max):
+    x = np.random.uniform(x_min, x_max)
+    y = np.random.uniform(y_min, y_max)
+    return [x, y]
+
 def main(control_mode, control_type, load_path = "", additional_args={}):
     '''
         @param control_mode: Where robot actions are generated: teleoperation_modes = mouse, mimic, keyboard, autonomous = BC, RL
@@ -174,6 +179,8 @@ def main(control_mode, control_type, load_path = "", additional_args={}):
                 time.sleep(0.7)
                 # wait to start moving
                 print("Press space to start")
+                goal = sample_reach_goal(x_min_lim, x_max_lim, y_min, y_max)
+                print("Goal: ", goal)
                 for j in range(10000):
                     time.sleep(0.01)  # To prevent high CPU usage
                     i += 1
@@ -229,6 +236,8 @@ def main(control_mode, control_type, load_path = "", additional_args={}):
                     elif control_mode in ["RL", "BC", 'rnet']:
                         x,y, puck = autonomous_model.take_action(true_pose, true_speed, true_force, measured_acc, rcv.isProtectiveStopped(), image, images, puck_history, lims, move_lims) # TODO: add image handling
                         puck_history.append(puck)
+                    elif control_mode =='reachBC':
+                        x, y, puck = autonomous_model.take_action_gc(true_pose, true_speed, true_force, measured_acc, rcv.isProtectiveStopped(), image, images, puck_history, lims, move_lims, goal)
                     ###### servoL #####
                     if control_type == "pol":
                         polx, poly = compute_pol(x, y, true_pose, lims, move_lims)
@@ -277,7 +286,7 @@ def main(control_mode, control_type, load_path = "", additional_args={}):
 
 
 if __name__ == "__main__":
-    control_mode = 'RL' # mouse, mimic, keyboard, RL, BC, rnet
+    control_mode = 'RL' # mouse, mimic, keyboard, RL, BC, rnet, reachBC
     control_type = 'rect' # rect, pol or prim
     additional_args = {"image_input": True, "frame_stack": 1, "algo": "ppo"}
     # load_path = "models/bc_model_9500.pt"
