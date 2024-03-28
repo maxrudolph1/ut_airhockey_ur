@@ -159,7 +159,7 @@ class BehaviorCloning(Agent):
                                 puck_history = puck_history[1:] + [puck_state.tolist() + [float(is_occluded)]]
                             
 
-                            puck_velocity = (np.array(last_puck_pos) - np.array(puck_history[-2])) # don't ignore the first puck history. just compte on the defaults
+                            puck_velocity = (np.array(last_puck_pos)[:2] - np.array(puck_history[-1])[:2]) # don't ignore the first puck history. just compte on the defaults
                             puck_paddle_rel_pos = np.array(last_puck_pos)[:2] - np.array(paddle_pos)
 
                             obs_from_measured_val = np.concatenate([obs_from_measured_val.reshape(1, -1),
@@ -179,11 +179,13 @@ class BehaviorCloning(Agent):
         mean = np.mean(obs, axis=0)
         std = np.std(obs, axis=0)
         std[std == 0] = 1
+        np.save('/datastor1/calebc/public/data/mouse_mimic_mean.npy', mean)
+        np.save('/datastor1/calebc/public/data/mouse_mimic_std.npy', std)
+        print(mean, std)
         obs = (np.array(obs) - np.array(mean)) / np.array(std)
 
         print('Storing data in buffer')
 
-        
         self.buffer.store_all(obs, acts)
 
     def load_img_data(self):
