@@ -137,6 +137,7 @@ class BehaviorCloning(Agent):
                         last_puck_pos = [-1.5,0, 0]
                         for puck_state, puck_mask, measured_val in zip(puck_pos, puck_nan_mask, measured_vals):
                             obs_from_measured_val = measured_val[3:16]
+                            paddle_pos = measured_val[4:6]
                             act = measured_val[-6:-4] - measured_val[4:6] # delta x, delta y
                             act/=[0.26, 0.12]
                             # if self.puck_detector is not None:
@@ -156,8 +157,15 @@ class BehaviorCloning(Agent):
                             else:
                                 last_puck_pos = (puck_state.tolist() + [float(is_occluded)])
                                 puck_history = puck_history[1:] + [puck_state.tolist() + [float(is_occluded)]]
+                            
 
-                            obs_from_measured_val = np.concatenate([obs_from_measured_val.reshape(1, -1), np.array(puck_history).reshape(1, -1)], 1).squeeze(0)
+                            puck_velocity = (np.array(last_puck_pos) - np.array(puck_history[-2])) # don't ignore the first puck history. just compte on the defaults
+                            puck_paddle_rel_pos = np.array(last_puck_pos)[:2] - np.array(paddle_pos)
+
+                            obs_from_measured_val = np.concatenate([obs_from_measured_val.reshape(1, -1),
+                                                                    np.array(puck_history).reshape(1, -1), 
+                                                                    puck_velocity.reshape(1,-1), 
+                                                                    puck_paddle_rel_pos.reshape(1,-1)], 1).squeeze(0)
                             obs.append(obs_from_measured_val)
                             acts.append(act)
                 except Exception as e:
@@ -165,9 +173,17 @@ class BehaviorCloning(Agent):
                     exit()
                         # continue
             
+            
+        print('Caclculating Mean and Variance')
+        
+        mean = np.mean(obs, axis=0)
+        std = np.std(obs, axis=0)
+        std[std == 0] = 1
+        obs = (np.array(obs) - np.array(mean)) / np.array(std)
+
         print('Storing data in buffer')
-        # print(len(imgs), imgs[0].shape)
-        print(np.max(acts), np.min(acts))
+
+        
         self.buffer.store_all(obs, acts)
 
     def load_img_data(self):
