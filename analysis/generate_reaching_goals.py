@@ -92,4 +92,4 @@ def produce_reaching(data_mode, dataset_path):
 
 
 if __name__ == '__main__':
-    produce_reaching(['mouse'], 'data')
+    produce_reaching(['mimic', 'mouse'], '/datastor1/calebc/public/data')
